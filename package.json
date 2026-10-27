@@ -1,5 +1,5 @@
 {
-  "name": "@us-all/datadog-mcp",
+  "name": "@selerix/datadog-mcp",
   "version": "1.21.1",
   "mcpName": "io.github.us-all/datadog",
   "description": "Datadog MCP server - 165 tools for metrics, monitors, logs, APM, RUM, incidents, CI/CD, status pages, fleet automation, and more",
@@ -19,10 +19,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/us-all/datadog-mcp-server.git"
+    "url": "https://github.com/selerix/Selerix-DataDog-MCP.git"
   },
-  "homepage": "https://github.com/us-all/datadog-mcp-server#readme",
-  "bugs": "https://github.com/us-all/datadog-mcp-server/issues",
+  "homepage": "https://github.com/selerix/Selerix-DataDog-MCP#readme",
+  "bugs": "https://github.com/selerix/Selerix-DataDog-MCP/issues",
   "keywords": [
     "mcp",
     "datadog",

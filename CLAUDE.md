@@ -64,4 +64,4 @@ New tools go in `index.ts` under the right `currentCategory` and into `EXPECTED_
 
 ## CI
 
-`.github/workflows/ci.yml` runs on Node 22: `pnpm install --frozen-lockfile`, build, tests, token-stats guard, plus a gitleaks secret scan. Commit `pnpm-lock.yaml` changes with any dependency edit, because `--frozen-lockfile` fails otherwise. `npm-publish.yml` and `docker-publish.yml` are inherited from upstream (not reviewed here); check them before relying on them in the fork, since the package is still named `@us-all/datadog-mcp`.
+`.github/workflows/ci.yml` runs on Node 22: `pnpm install --frozen-lockfile`, build, tests, token-stats guard, plus a gitleaks secret scan. Commit `pnpm-lock.yaml` changes with any dependency edit, because `--frozen-lockfile` fails otherwise. `npm-publish.yml` and `docker-publish.yml` are inherited from upstream (not reviewed here); check them before relying on them in the fork. The package is `@selerix/datadog-mcp` (renamed from `@us-all/datadog-mcp`); `README.md`, `CONTRIBUTING.md`, `server.json`'s `name` and `package.json`'s `mcpName` still carry upstream's `us-all` identity.

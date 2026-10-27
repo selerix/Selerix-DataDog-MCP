@@ -3,14 +3,14 @@
   "name": "io.github.us-all/datadog",
   "description": "Datadog MCP — 165 tools for metrics, monitors, logs, APM, RUM, incidents, CI/CD, fleet",
   "repository": {
-    "url": "https://github.com/us-all/datadog-mcp-server",
+    "url": "https://github.com/selerix/Selerix-DataDog-MCP",
     "source": "github"
   },
   "version": "1.19.2",
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@us-all/datadog-mcp",
+      "identifier": "@selerix/datadog-mcp",
       "version": "1.19.2",
       "transport": {
         "type": "stdio"
