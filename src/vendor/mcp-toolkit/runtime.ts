@@ -33,6 +33,17 @@ export interface HttpHandle {
 
 const LOCALHOST_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
+/** Host:port as it appears in a URL or Host header; IPv6 literals are wrapped in brackets. */
+export function formatHostPort(host: string, port: number): string {
+  return `${host.includes(":") ? `[${host}]` : host}:${port}`;
+}
+
+// Selerix change: upstream built this list as `${host}:${port}`, which for an IPv6 bind host such as ::1
+// gives "::1:3000" while clients send "[::1]:3000", so every request was rejected as an invalid Host.
+export function localhostAllowedHosts(host: string, port: number): string[] {
+  return [...new Set([host, "localhost", "127.0.0.1", "::1"])].map((h) => formatHostPort(h, port));
+}
+
 function resolveTransport(opt: TransportKind | undefined): TransportKind {
   if (opt) return opt;
   const env = process.env.MCP_TRANSPORT?.toLowerCase();
@@ -132,13 +143,7 @@ export async function startMcpServer(
         const boundPort = typeof address === "object" && address ? address.port : port;
         const allowedHosts =
           opts.allowedHosts ??
-          (isLocalhost
-            ? [
-                `${host}:${boundPort}`,
-                `localhost:${boundPort}`,
-                `127.0.0.1:${boundPort}`,
-              ]
-            : undefined);
+          (isLocalhost ? localhostAllowedHosts(host, boundPort) : undefined);
 
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
@@ -148,7 +153,7 @@ export async function startMcpServer(
         await server.connect(transport);
 
         const authState = skipAuth ? " (auth disabled)" : "";
-        console.error(`MCP server running on http://${host}:${boundPort}/mcp${authState}`);
+        console.error(`MCP server running on http://${formatHostPort(host, boundPort)}/mcp${authState}`);
 
         resolve({
           port: boundPort,
