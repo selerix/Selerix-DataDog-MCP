@@ -51,6 +51,15 @@ import {
   triggerSyntheticsSchema, triggerSynthetics, createSyntheticsTestSchema, createSyntheticsTest,
   updateSyntheticsTestSchema, updateSyntheticsTest, deleteSyntheticsTestSchema, deleteSyntheticsTest,
 } from "./tools/synthetics.js";
+import {
+  getSyntheticsBrowserTestSchema, getSyntheticsBrowserTest,
+  getSyntheticsBrowserResultsSchema, getSyntheticsBrowserResults,
+  getSyntheticsBrowserResultSchema, getSyntheticsBrowserResult,
+  updateSyntheticsBrowserTestSchema, updateSyntheticsBrowserTest,
+  listSyntheticsGlobalVariablesSchema, listSyntheticsGlobalVariables,
+  getSyntheticsGlobalVariableSchema, getSyntheticsGlobalVariable,
+  editSyntheticsGlobalVariableSchema, editSyntheticsGlobalVariable,
+} from "./tools/synthetics-browser.js";
 import { listDowntimesSchema, listDowntimes, createDowntimeSchema, createDowntime, cancelDowntimeSchema, cancelDowntime } from "./tools/downtimes.js";
 import {
   searchSecuritySignalsSchema, searchSecuritySignals,
@@ -544,6 +553,55 @@ tool(
   "Delete one or more Synthetics tests by public ID",
   deleteSyntheticsTestSchema.shape,
   wrapToolHandler(deleteSyntheticsTest),
+);
+
+tool(
+  "get-synthetics-browser-test",
+  "Get a Synthetics browser test: config, start URL, variables and recorded steps (indexed, with params)",
+  getSyntheticsBrowserTestSchema.shape,
+  wrapToolHandler(getSyntheticsBrowserTest),
+);
+
+tool(
+  "get-synthetics-browser-results",
+  "List the latest results of a Synthetics browser test by public ID (status, duration, step counts)",
+  getSyntheticsBrowserResultsSchema.shape,
+  wrapToolHandler(getSyntheticsBrowserResults),
+);
+
+tool(
+  "get-synthetics-browser-result",
+  "Get one browser test result with per-step details; set onlyProblemSteps to see just failed or skipped steps",
+  getSyntheticsBrowserResultSchema.shape,
+  wrapToolHandler(getSyntheticsBrowserResult),
+);
+
+tool(
+  "update-synthetics-browser-test",
+  "Update a Synthetics browser test: metadata, start URL, individual steps (stepUpdates) or all steps, config/local variables. Use dryRun to preview. Write-gated unless dryRun",
+  updateSyntheticsBrowserTestSchema.shape,
+  wrapToolHandler(updateSyntheticsBrowserTest),
+);
+
+tool(
+  "list-synthetics-global-variables",
+  "List Synthetics global variables (id, name, tags, secure flag; values are not included)",
+  listSyntheticsGlobalVariablesSchema.shape,
+  wrapToolHandler(listSyntheticsGlobalVariables),
+);
+
+tool(
+  "get-synthetics-global-variable",
+  "Get a Synthetics global variable by ID; the value is returned only for non-secure variables",
+  getSyntheticsGlobalVariableSchema.shape,
+  wrapToolHandler(getSyntheticsGlobalVariable),
+);
+
+tool(
+  "edit-synthetics-global-variable",
+  "Edit a Synthetics global variable (name, description, tags, value). Secure variables need a new value. Write-gated",
+  editSyntheticsGlobalVariableSchema.shape,
+  wrapToolHandler(editSyntheticsGlobalVariable),
 );
 
 // --- Downtimes ---

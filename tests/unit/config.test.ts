@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Keep a developer's local .env from leaking into these tests.
+vi.mock("dotenv", () => ({ default: { config: () => ({}) } }));
+
 describe("config", () => {
   beforeEach(() => {
     vi.resetModules();

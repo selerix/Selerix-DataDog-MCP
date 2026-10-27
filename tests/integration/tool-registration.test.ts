@@ -53,9 +53,12 @@ const EXPECTED_TOOLS = [
   "list-hosts", "get-host-totals",
   // SLOs (3)
   "list-slos", "get-slo", "get-slo-history",
-  // Synthetics (6)
+  // Synthetics (13)
   "list-synthetics", "get-synthetics-result", "trigger-synthetics",
   "create-synthetics-test", "update-synthetics-test", "delete-synthetics-test",
+  "get-synthetics-browser-test", "get-synthetics-browser-results", "get-synthetics-browser-result",
+  "update-synthetics-browser-test",
+  "list-synthetics-global-variables", "get-synthetics-global-variable", "edit-synthetics-global-variable",
   // Downtimes (3)
   "list-downtimes", "create-downtime", "cancel-downtime",
   // Security (9)
@@ -120,7 +123,7 @@ describe("tool registration", () => {
   });
 
   it("registers exactly 166 tools (162 datadog + 3 aggregations + 1 search-tools meta)", () => {
-    expect(toolCalls).toHaveLength(166);
+    expect(toolCalls).toHaveLength(173);
   });
 
   it("applies inferred annotations to every tool (read/write/destructive hints)", () => {

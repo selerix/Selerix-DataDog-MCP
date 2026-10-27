@@ -2,146 +2,66 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## What this is
 
-Custom Datadog MCP (Model Context Protocol) server that gives Claude access to Datadog monitoring APIs. Replaces the limited community MCP server by adding time-series metrics queries, APM/Traces, RUM data, and full Datadog API coverage via the official SDK.
+Selerix fork of the MIT-licensed community `us-all/datadog-mcp-server`: an MCP server (stdio by default) that exposes Datadog APIs as tools through the official `@datadog/datadog-api-client`. Keep the upstream `LICENSE` and copyright notice intact.
 
-## Tech Stack
+Selerix's goal for the fork is managing Datadog **Synthetics browser tests** from Claude (explore tests, edit recordings/steps, edit variables, read results, trigger scheduled runs). See "Synthetics: API tests vs browser tests" below — the upstream code only covers API tests; the browser-test tools are Selerix additions.
 
-- **Runtime**: Node.js 18+ with TypeScript (strict mode)
-- **Package Manager**: pnpm
-- **MCP SDK**: `@modelcontextprotocol/sdk` (^1.27.1)
-- **Datadog Client**: `@datadog/datadog-api-client` (^1.59.0)
-- **Validation**: zod
-- **Config**: dotenv
+## Commands
 
-## Build & Run Commands
+Requires Node >= 22 (`engines` in package.json; CI uses 22) and pnpm 10 (`packageManager` pins it). Use `pnpm`, not npm.
+
+On the maintainer's Windows machine, pnpm crashes with `Cannot read properties of null (reading 'replace')` because `~/.npmrc` has a malformed `//registry = {...}` line. Work around it per shell with `NPM_CONFIG_USERCONFIG` pointing at an empty file (e.g. `$env:NPM_CONFIG_USERCONFIG = "<path>\empty.npmrc"; npx -y pnpm@10.30.2 <cmd>`), or fix that line in `~/.npmrc`.
 
 ```bash
-pnpm install          # Install dependencies
-pnpm run build        # Compile TypeScript → dist/
-pnpm run dev          # Watch mode (auto-rebuild)
-node dist/index.js    # Run the MCP server
+pnpm install
+pnpm run build        # tsc, then copies src/ui -> dist/ui (the copy is part of build; plain tsc is not enough)
+pnpm run dev          # tsc --watch
+pnpm test             # vitest run (tests/**/*.test.ts, forked pool)
+pnpm vitest run tests/unit/utils.test.ts          # single file
+pnpm vitest run -t "name fragment"                 # single test by name
+pnpm run smoke        # live read-only calls against a real Datadog account; needs .env, builds first
+pnpm run token-stats  # measures tool-schema token size; CI fails above TOKEN_BUDGET=30000
+node dist/index.js    # run the server
 ```
+
+Config comes from env / `.env` (copy `.env.example`): `DD_API_KEY`, `DD_APP_KEY` (both required, validated at startup), `DD_SITE` (default `us5.datadoghq.com` — set it to match the org's site), `DD_ALLOW_WRITE`, `DD_TOOLS` / `DD_DISABLE` (comma-separated category allow/deny lists), `MCP_TRANSPORT=http` + `MCP_HTTP_TOKEN` for Streamable HTTP instead of stdio. `tests/setup.ts` injects fake keys, because `config.ts` reads env at import time.
 
 ## Architecture
 
-This is an MCP server running as a subprocess, configured via `.mcp.json`. The data flow is:
+Request path: MCP client -> `src/index.ts` -> `src/tools/<category>.ts` -> shared SDK clients in `src/client.ts` -> Datadog.
 
-```
-Claude AI → MCP Protocol → index.ts (server) → tools/*.ts → Datadog API Client → Datadog API
-```
+- `src/index.ts` (~1500 lines) is the only place tools are registered. A module-level `currentCategory` variable is set before each block of `tool(name, description, schema.shape, wrapToolHandler(fn))` calls; the local `tool()` helper registers the name in the `ToolRegistry` (`src/tool-registry.ts`), and only calls `server.tool` if that category is enabled. When adding a tool, you must put it under the right `currentCategory = "..."` line, otherwise it is filtered under the wrong `DD_TOOLS`/`DD_DISABLE` category. New categories must be added to `CATEGORIES` in `tool-registry.ts`.
+- Each tool file exports a zod schema (`zod/v4`, `.describe()` on every field — the model reads them) plus an async handler returning a trimmed object, not the raw SDK response. Several read tools also get default field slimming via `src/tools/extract-fields.ts`.
+- `src/tools/utils.ts`: `wrapToolHandler` (from `@us-all/mcp-toolkit`) handles error shaping and redacts the API/app keys. Write tools must call `assertWriteAllowed()` first; it throws `WriteBlockedError` unless `DD_ALLOW_WRITE=true`. Writes are off by default, so a "write blocked" error is expected until you set that.
+- `inferToolAnnotations` (toolkit) derives `readOnlyHint`/`destructiveHint` from the tool name, so tool names should follow the existing `list-/get-/search-` vs `create-/update-/delete-` verbs. `tests/integration/tool-registration.test.ts` mocks `McpServer`, asserts the full `EXPECTED_TOOLS` list and annotations — update that list when adding or removing a tool.
+- `src/resources.ts` (`dd://...` URIs), `src/prompts.ts`, `src/tools/aggregations.ts` (multi-call summaries such as `analyze-monitor-state`, `slo-compliance-snapshot`, `incident-triage-snapshot`) and `src/ui/*.html` (ChatGPT/Apps SDK card templates) sit alongside the plain API-wrapper tools.
+- Much of the plumbing (registry, wrapper, annotations, transport bootstrap, `aggregate()`) lives in the external `@us-all/mcp-toolkit` package, not in this repo. Behaviour changes there arrive via dependency bumps.
 
-### Key Source Files
+### SDK gotcha
 
-- `src/index.ts` — MCP server entry point, 156 tool registrations
-- `src/config.ts` — Environment variable loading (DD_API_KEY, DD_APP_KEY, DD_SITE)
-- `src/client.ts` — Datadog API client initialization using official SDK
-- `src/tools/utils.ts` — `wrapToolHandler` error handling wrapper for all tools
-- `src/tools/` — One file per tool category, each exporting schema + handler
+For v2 aggregate/search request bodies (e.g. `aggregate-logs`, `aggregate-rum`), build SDK model instances (`new v2.LogsAggregateRequest()`, `new v2.LogsCompute()`). Plain objects cast with `as any` skip `ObjectSerializer` field mapping (`groupBy` -> `group_by`) and Datadog returns 400. The v1 synthetics code in this repo passes plain objects (with `as any`) and was not observed failing, but it hasn't been verified against a live account here.
 
-### Tool Pattern
+## Synthetics: API tests vs browser tests (the fork's reason to exist)
 
-Each tool file follows the same pattern:
-1. Define zod input schema with `.describe()` on every field
-2. Call Datadog API via official SDK client
-3. Transform response to a readable format
-4. Handler is wrapped with `wrapToolHandler()` in index.ts for error handling
+Upstream's `src/tools/synthetics.ts` (`get-synthetics-result`, `create/update-synthetics-test`) is **API-test-only** (`getAPITest*`, `type: "api"`); `list-synthetics`, `trigger-synthetics` and `delete-synthetics-test` use type-agnostic endpoints and work for browser tests too (list verified live; trigger and delete not exercised).
 
-### Tool Categories (156 tools)
+Selerix additions live in `src/tools/synthetics-browser.ts` (registered in the same `"synthetics"` category block of `index.ts`):
 
-| File | Tools |
-|------|-------|
-| `metrics.ts` | `query-metrics`, `get-metrics`, `get-metric-metadata`, `list-active-metrics`, `list-metric-tags` |
-| `monitors.ts` | `get-monitors`, `get-monitor`, `create-monitor`, `update-monitor`, `delete-monitor`, `mute-monitor`, `validate-monitor` |
-| `dashboards.ts` | `get-dashboards`, `get-dashboard`, `create-dashboard`, `update-dashboard`, `delete-dashboard` |
-| `logs.ts` | `search-logs`, `aggregate-logs`, `send-logs` |
-| `events.ts` | `get-events`, `post-event` |
-| `incidents.ts` | `get-incidents`, `get-incident`, `search-incidents`, `create-incident`, `update-incident`, `delete-incident` |
-| `apm.ts` | `search-spans` |
-| `rum.ts` | `search-rum-events`, `aggregate-rum`, `list-rum-applications`, `get-rum-application`, `create-rum-application`, `update-rum-application`, `delete-rum-application` |
-| `rum-metrics.ts` | `list-rum-metrics`, `get-rum-metric`, `create-rum-metric`, `update-rum-metric`, `delete-rum-metric` |
-| `rum-retention-filters.ts` | `list-rum-retention-filters`, `get-rum-retention-filter`, `create-rum-retention-filter`, `update-rum-retention-filter`, `delete-rum-retention-filter` |
-| `hosts.ts` | `list-hosts`, `get-host-totals` |
-| `slos.ts` | `list-slos`, `get-slo`, `get-slo-history` |
-| `synthetics.ts` | `list-synthetics`, `get-synthetics-result`, `trigger-synthetics`, `create-synthetics-test`, `update-synthetics-test`, `delete-synthetics-test` |
-| `downtimes.ts` | `list-downtimes`, `create-downtime`, `cancel-downtime` |
-| `security.ts` | `search-security-signals`, `get-security-signal`, `list-security-rules`, `get-security-rule`, `delete-security-rule`, `list-security-suppressions`, `get-security-suppression`, `create-security-suppression`, `delete-security-suppression` |
-| `account.ts` | `get-usage-summary`, `list-users` |
-| `notebooks.ts` | `list-notebooks`, `get-notebook` |
-| `oncall.ts` | `get-team-oncall`, `get-oncall-schedule` |
-| `services.ts` | `list-services`, `get-service-definition` |
-| `containers.ts` | `list-containers` |
-| `processes.ts` | `list-processes` |
-| `audit.ts` | `search-audit-logs` |
-| `cases.ts` | `list-cases`, `get-case`, `create-case`, `update-case-status` |
-| `errors.ts` | `list-error-tracking-issues`, `get-error-tracking-issue` |
-| `ci.ts` | `search-ci-pipelines`, `aggregate-ci-pipelines`, `search-ci-tests`, `aggregate-ci-tests` |
-| `networks.ts` | `list-network-devices`, `get-network-device` |
-| `dora.ts` | `send-dora-deployment`, `send-dora-incident` |
-| `teams.ts` | `list-teams`, `get-team`, `create-team`, `update-team`, `delete-team`, `get-team-members` |
-| `logs-metrics.ts` | `list-logs-metrics`, `get-logs-metric`, `create-logs-metric`, `update-logs-metric`, `delete-logs-metric` |
-| `spans-metrics.ts` | `list-spans-metrics`, `get-spans-metric`, `create-spans-metric`, `update-spans-metric`, `delete-spans-metric` |
-| `slo-corrections.ts` | `list-slo-corrections`, `get-slo-correction`, `create-slo-correction`, `update-slo-correction`, `delete-slo-correction` |
-| `apm-retention-filters.ts` | `list-apm-retention-filters`, `get-apm-retention-filter`, `create-apm-retention-filter`, `update-apm-retention-filter`, `delete-apm-retention-filter` |
-| `status-pages.ts` | `list-status-pages`, `get-status-page`, `create-status-page`, `update-status-page`, `delete-status-page`, `publish-status-page`, `unpublish-status-page`, `list-status-page-components`, `get-status-page-component`, `create-status-page-component`, `update-status-page-component`, `delete-status-page-component`, `list-status-page-degradations`, `get-status-page-degradation`, `create-status-page-degradation`, `update-status-page-degradation`, `delete-status-page-degradation`, `list-status-page-maintenances`, `get-status-page-maintenance`, `create-status-page-maintenance`, `update-status-page-maintenance` |
-| `fleet.ts` | `list-fleet-agents`, `get-fleet-agent-info`, `list-fleet-agent-versions`, `list-fleet-tracers`, `list-fleet-deployments`, `get-fleet-deployment`, `create-fleet-deployment-configure`, `create-fleet-deployment-upgrade`, `cancel-fleet-deployment`, `list-fleet-schedules`, `get-fleet-schedule`, `create-fleet-schedule`, `update-fleet-schedule`, `delete-fleet-schedule`, `trigger-fleet-schedule` |
+- Browser tests: `get-synthetics-browser-test`, `get-synthetics-browser-results`, `get-synthetics-browser-result`, `update-synthetics-browser-test`.
+- Global variables: `list-synthetics-global-variables`, `get-synthetics-global-variable`, `edit-synthetics-global-variable`. No create/delete.
+- `update-synthetics-browser-test` supports `dryRun` (needs no `DD_ALLOW_WRITE`), `stepUpdates` (per-step edits; params are shallow-merged; step chosen by `index` or step `publicId`), full `steps` replacement, and `configVariables`/`variables` replacement. Datadog's PUT replaces the whole test, so the tool fetches the current test and merges. If the GET returns zero steps (seen for 1 of 25 sampled tests) it refuses to save unless `steps` is passed, to avoid wiping the recording.
+- Datadog never returns secure global-variable values, so `edit-synthetics-global-variable` requires `value` for secure variables. Non-secure values are returned in clear by `get-synthetics-global-variable`; none of the org's 10 global variables was marked secure when checked.
 
-## Environment Variables
+The read tools and the dry run were verified live against the Selerix org; the actual save paths (`update-synthetics-browser-test` without `dryRun`, `edit-synthetics-global-variable`) have not been exercised. Not covered: creating browser tests, creating/deleting global variables, mobile tests.
 
-```bash
-DD_API_KEY=<datadog-api-key>        # Required
-DD_APP_KEY=<datadog-application-key> # Required
-DD_SITE=us5.datadoghq.com           # Default: us5.datadoghq.com
-DD_ALLOW_WRITE=false                 # Default: false. Set to "true" to enable write operations.
-```
+New tools go in `index.ts` under the right `currentCategory` and into `EXPECTED_TOOLS` (also bump the count assertion in `tool-registration.test.ts`). `pnpm run token-stats` reports ~31.6k tokens for the full 173-tool default set, above the `TOKEN_BUDGET=30000` guard in `ci.yml`; raise the budget or trim descriptions before relying on CI.
 
-## SDK Usage Pattern
+## Docs that go stale
 
-Datadog v2 API aggregate tools (`aggregate-logs`, `aggregate-rum`) must use SDK model class instances. Passing plain objects with `as any` causes `ObjectSerializer` to fail field mapping (e.g., `groupBy` → `group_by`), resulting in API 400 errors.
+`README.md`, `package.json` description, `CHANGELOG.md`, the `registry` description string in `tool-registry.ts` and `server.json` all quote a tool count (158 / 159 / 163 / 165 / 166 appear in different places). Treat `EXPECTED_TOOLS` in the registration test as the source of truth and don't copy a count into new docs. `CONTRIBUTING.md` says Node 18+ and uses the older `server.tool(...)` registration example; the Node requirement in `package.json` and the `tool()` helper in `index.ts` are what actually apply. `PLAN.md`, `STANDARD.md` (a redirect to the toolkit repo) and `OSS_SECURITY_FINAL_REPORT.md` are upstream project artefacts.
 
-```typescript
-// Correct (SDK model instances)
-const compute = new v2.LogsCompute();
-const body = new v2.LogsAggregateRequest();
+## CI
 
-// Wrong (plain object + as any)
-const body = { compute: [...] } as any;  // ObjectSerializer mapping fails
-```
-
-## 최근 변경사항
-
-- **v1.21.1** (2026-06-19): MCP tool annotations 적용 — `@us-all/mcp-toolkit ^1.3.0`의 `inferToolAnnotations`를 중앙 `tool()` 헬퍼에 1줄 추가, 166 도구 전부 `readOnlyHint`/`destructiveHint`/`openWorldHint` 자동 부여 (read 94 / write 72 / destructive 22, override 0). tool-registration 테스트에 annotation 검증 추가, 23→24 test. 비파괴 패치.
-- **v1.21.0** (2026-06-19): `@datadog/datadog-api-client` ^1.57.0 → ^1.59.0 마이그레이션. **BREAKING (dead endpoints)**: SDK 1.59가 `listFleetClusters`/`listFleetInstrumentedPods` 메서드 및 관련 모델 전체를 삭제 → 이를 백킹하던 `list-fleet-clusters`, `list-fleet-instrumented-pods` 두 도구 제거 (라이브 호출도 `is not a function`으로 이미 비동작, 실질 기능 손실 0). `create-status-page`의 `enabled` 속성 제거 (1.59에서 attribute 삭제, `subscriptionsEnabled`는 별개로 유지). 도구 168→166 (datadog 164→162). 유지된 fleet 도구(agents/versions/deployments/schedules)는 prod Datadog에서 1.59 런타임 라이브 검증 통과. 23/23 vitest.
-- **v1.19.3** (2026-05-15): `@datadog/datadog-api-client` ^1.56.0 → ^1.57.0 (caret 범위 내 minor 흡수, breaking 없음) + `@us-all/mcp-toolkit` ^1.2.1 → ^1.2.2 dep 핀. 코드 변경 0줄, 23/23 vitest 통과.
-- **v1.19.1** (2026-05-06): MCP Server Registry 발행 — `mcpName: "io.github.us-all/datadog"` 추가 + 루트 `server.json` (npm 패키지 + stdio transport + 6개 환경변수 메타데이터). 코드 변경 0줄. registry.modelcontextprotocol.io에서 검색 가능.
-- **v1.19.0** (2026-05-05): 신규 `incident-triage-snapshot` 어그리게이션 도구 — `triage-incident` Prompt(워크플로우 5단계)을 단일 호출 구조 응답으로 압축. `get-incident` + `get-events`(lookback 윈도우) + `search-incidents`(같은 service, 14일) + `aggregate-logs`(error spike 휴리스틱: peak ≥ 3× avg & ≥ 5 errors) 4-fan-out. incident.fields에서 services/teams 자동 추출, durationMin 계산, 같은 사고 ID 자가 필터링. Promise.allSettled — 부분 실패 caveats[]. 도구 164→165 (+1 aggregation).
-- **v1.18.1** (2026-05-05): `@us-all/mcp-toolkit ^1.2.1` 핀 업데이트 — 자동 cascade. 코드 변경 0줄.
-- **v1.18.0** (2026-05-05): Apps SDK UI 카드 — `slo-compliance-snapshot` 도구 결과를 `_meta["openai/outputTemplate"]` 통해 ChatGPT/Apps SDK 클라이언트에서 카드로 렌더. 새 리소스 `ui://widget/slo-compliance-snapshot.html` (`text/html+skybridge`), 도구 응답에 `structuredContent` + `_meta` 추가. Claude 클라이언트는 `_meta`를 무시하고 기존 텍스트 응답 그대로 사용 — non-breaking. 빌드 시 `src/ui/*.html`을 `dist/ui/`로 자동 복사.
-- **v1.17.0** (2026-05-05): `startMcpServer` 채택 — toolkit v1.2.0의 런타임 헬퍼로 stdio 부트스트랩 12라인을 1줄로 교체. `MCP_TRANSPORT=http`로 Streamable HTTP transport 옵트인 가능 (기본 stdio). `MCP_HTTP_TOKEN` Bearer 인증, `/mcp` JSON-RPC + `/health` 엔드포인트. 기존 stdio 사용자 영향 0.
-- **v1.16.5** (2026-05-05): `@us-all/mcp-toolkit ^1.2.0` 핀 업데이트 — 자동 cascade. 코드 변경 0줄.
-- **v1.16.4** (2026-05-03): `serverInfo.version`이 `"1.8.0"`에 박혀있던 것을 `package.json`에서 런타임 로드. initialize handshake에서 보고하는 server version이 실제 패키지 버전과 일치.
-- **v1.16.3** (2026-05-03): `@us-all/mcp-toolkit ^1.1.0` 채택 + `aggregate()` 헬퍼로 두 어그리게이션 도구(`analyze-monitor-state`, `slo-compliance-snapshot`) 마이그레이션. `Promise.allSettled` + 라벨링된 `caveats.push` 보일러플레이트 통합. `analyze-monitor-state`는 이전엔 caveats 노출 없었음 — 추가됨(추가 필드, 비파괴). caveats 라벨 텍스트 변경 (예: `get-slo failed:` → `getSlo failed:`).
-- **v1.16.2** (2026-05-03): `@us-all/mcp-toolkit ^1.0.0` 핀 업데이트. toolkit API freeze (semver 1.x 보장 시작) — 코드 변경 0줄, 23/23 테스트 통과.
-- **v1.16.1** (2026-05-03): Wave 5 — `analyze-monitor-state`의 embedded `monitor` 필드를 `get-monitor`의 slim 6-field default(id/name/type/overallState/tags/query)에 정렬. monitorState/monitorType은 slim 전 summary 블록에 보존.
-- **v1.16.0** (2026-05-03): SLO CRUD 추가 (`create-slo`, `update-slo`, `delete-slo`) — v1.15.0 검증 중 발견된 audit gap. 도구 159→164.
-- **v1.15.0** (2026-05-02): `slo-compliance-snapshot` 어그리게이션 — slo + history + corrections + monitor states 1 call. 상태 compliant/at-risk/breached, errorBudgetRemainingPct.
-- **v1.14.0** (2026-05-02): Wave 3 Resources — `dd://service/{name}`, `dd://team/{id}`(team+members 합본), `dd://synthetics/{testId}`.
-- **v1.13.0** (2026-05-02): MCP Prompts 4개 — `triage-incident`, `audit-monitor-noise`, `analyze-rum-error-spike`, `investigate-slow-trace`.
-- **v1.12.2** (2026-05-02): Wave 1 — describe trim 25, 의존성 bumps, fat-read 3개에 default extractFields(get-monitor/incident/dashboard).
-- **v1.12.1** (2026-05-02): `@us-all/mcp-toolkit ^0.2.0` 채택 — 로컬 `sanitize` / `wrapToolHandler` 본문 제거, `createWrapToolHandler` factory로 위임. `redactionPatterns`(DD_API_KEY/DD_APP_KEY)와 `errorExtractors`(WriteBlockedError → passthrough, Datadog ApiException duck-typed → structured)만 명시. utils.ts 108→66 lines.
-- **v1.12.0** (2026-05-01): `@us-all/mcp-toolkit ^0.1.0` 마이그레이션 — tool-registry/extract-fields toolkit 위임. ~194 lines 절감.
-- **v1.11.1**: 추가 MCP Resources (`dd://host/{name}`).
-- **v1.11.0**: `analyze-monitor-state` 어그리게이션 도구 — config + state + recent events + downtimes 1 call.
-- **v1.10.0**: MCP Resources (`dd://` URI) — monitor, dashboard, slo, incident.
-- **v1.9.2**: `pnpm token-stats` + CI TOKEN_BUDGET=30000 가드.
-- **v1.9.1**: `extractFields` auto-apply via wrapToolHandler. rum/security/incidents/monitors 핵심 스키마에 명시적 선언.
-- **v1.9.0**: 토큰 효율 표준 (DD_TOOLS / DD_DISABLE 16 카테고리 + search-tools 메타툴).
-- **v1.8.1**: hono >=4.12.14 보안 패치 (GHSA-458j-xx4x-4375).
-- **README**: 158→159 도구 카운트 동기화. "When to use this vs official Datadog Bits AI MCP" 비교표 추가. PLAN.md 재작성.
-
-## 표준 가이드
-
-`@us-all` MCP 작성 표준은 [mcp-toolkit/STANDARD.md](https://github.com/us-all/mcp-toolkit/blob/main/STANDARD.md)에 있음. 이 repo의 STANDARD.md는 redirect.
-
-신규 패턴 진화 시 `@us-all/mcp-toolkit` 한 곳만 업그레이드 → 6 production repo 자동 혜택.
+`.github/workflows/ci.yml` runs on Node 22: `pnpm install --frozen-lockfile`, build, tests, token-stats guard, plus a gitleaks secret scan. Commit `pnpm-lock.yaml` changes with any dependency edit, because `--frozen-lockfile` fails otherwise. `npm-publish.yml` and `docker-publish.yml` are inherited from upstream (not reviewed here); check them before relying on them in the fork, since the package is still named `@us-all/datadog-mcp`.
