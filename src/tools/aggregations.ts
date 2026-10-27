@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { v2 } from "@datadog/datadog-api-client";
-import { aggregate } from "@us-all/mcp-toolkit";
+import { aggregate } from "../vendor/mcp-toolkit/index.js";
 import { monitorsApi, eventsApi, downtimesApi, slosApi, sloCorrectionsApi, incidentsApi, logsApi } from "../client.js";
 import { applyExtractFields, extractFieldsDescription } from "./extract-fields.js";
 

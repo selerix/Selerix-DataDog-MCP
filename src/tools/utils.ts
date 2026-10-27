@@ -1,4 +1,4 @@
-import { createWrapToolHandler } from "@us-all/mcp-toolkit";
+import { createWrapToolHandler } from "../vendor/mcp-toolkit/index.js";
 import { config } from "../config.js";
 
 export class WriteBlockedError extends Error {

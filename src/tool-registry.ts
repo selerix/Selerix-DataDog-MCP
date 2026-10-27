@@ -1,4 +1,4 @@
-import { ToolRegistry, createSearchToolsMetaTool } from "@us-all/mcp-toolkit";
+import { ToolRegistry, createSearchToolsMetaTool } from "./vendor/mcp-toolkit/index.js";
 import { config } from "./config.js";
 
 export const CATEGORIES = [

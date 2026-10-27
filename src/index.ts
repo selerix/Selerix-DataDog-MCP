@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { startMcpServer } from "@us-all/mcp-toolkit/runtime";
-import { inferToolAnnotations } from "@us-all/mcp-toolkit";
+import { startMcpServer } from "./vendor/mcp-toolkit/runtime.js";
+import { inferToolAnnotations } from "./vendor/mcp-toolkit/index.js";
 import { validateConfig } from "./config.js";
 
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
