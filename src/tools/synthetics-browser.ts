@@ -185,6 +185,15 @@ export function applyStepUpdates(
   return { steps: next, changed: [...changed].sort((a, b) => a - b) };
 }
 
+/**
+ * Datadog returns a `publicId` on every step but rejects it on update (HTTP 400, "'public_id' was
+ * unexpected"), so it is removed from the steps before they are sent back.
+ */
+export function withoutReadOnlyStepFields(step: Record<string, any>): Record<string, any> {
+  const { publicId: _publicId, ...rest } = step;
+  return rest;
+}
+
 export async function updateSyntheticsBrowserTest(params: z.infer<typeof updateSyntheticsBrowserTestSchema>) {
   if (params.steps && params.stepUpdates) {
     throw new Error("Pass either steps (full replacement) or stepUpdates (targeted edits), not both");
@@ -250,7 +259,7 @@ export async function updateSyntheticsBrowserTest(params: z.infer<typeof updateS
         ...(params.configVariables ? { configVariables: params.configVariables as any } : {}),
         ...(params.variables ? { variables: params.variables as any } : {}),
       },
-      steps: steps as any,
+      steps: steps.map(withoutReadOnlyStepFields) as any,
     },
   });
 

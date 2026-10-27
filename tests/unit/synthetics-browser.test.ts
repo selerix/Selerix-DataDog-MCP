@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyStepUpdates, updateSyntheticsBrowserTestSchema } from "../../src/tools/synthetics-browser.js";
+import { applyStepUpdates, updateSyntheticsBrowserTestSchema, withoutReadOnlyStepFields } from "../../src/tools/synthetics-browser.js";
 
 const steps = () => [
   { publicId: "aaa-111", name: "Open page", type: "goToUrl", params: { value: "https://x" } },
@@ -35,6 +35,14 @@ describe("applyStepUpdates", () => {
   it("rejects an out-of-range index and an unknown publicId", () => {
     expect(() => applyStepUpdates(steps(), [{ index: 3, name: "x" }])).toThrow(/Step not found/);
     expect(() => applyStepUpdates(steps(), [{ publicId: "nope", name: "x" }])).toThrow(/Step not found/);
+  });
+});
+
+describe("withoutReadOnlyStepFields", () => {
+  it("drops the step publicId that Datadog rejects on update and keeps everything else", () => {
+    const step = { publicId: "aaa-111", name: "Open page", type: "goToUrl", allowFailure: true, params: { value: "https://x" } };
+    expect(withoutReadOnlyStepFields(step)).toEqual({ name: "Open page", type: "goToUrl", allowFailure: true, params: { value: "https://x" } });
+    expect(step.publicId).toBe("aaa-111");
   });
 });
 
