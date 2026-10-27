@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyStepUpdates, buildBrowserTestBody, createSyntheticsBrowserTestSchema, updateSyntheticsBrowserTestSchema, withoutReadOnlyStepFields } from "../../src/tools/synthetics-browser.js";
+import { applyStepUpdates, buildBrowserTestBody, createSyntheticsBrowserTestSchema, setSyntheticsTestStatusSchema, updateSyntheticsBrowserTestSchema, withLock, withoutReadOnlyStepFields } from "../../src/tools/synthetics-browser.js";
 
 const steps = () => [
   { publicId: "aaa-111", name: "Open page", type: "goToUrl", params: { value: "https://x" } },
@@ -38,6 +38,38 @@ describe("applyStepUpdates", () => {
   });
 });
 
+describe("withLock", () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it("runs calls with the same key one after another, in order", async () => {
+    const events: string[] = [];
+    const task = (name: string, ms: number) => withLock("same", async () => {
+      events.push(`start ${name}`);
+      await sleep(ms);
+      events.push(`end ${name}`);
+      return name;
+    });
+    const results = await Promise.all([task("a", 30), task("b", 5), task("c", 1)]);
+    expect(results).toEqual(["a", "b", "c"]);
+    expect(events).toEqual(["start a", "end a", "start b", "end b", "start c", "end c"]);
+  });
+
+  it("does not block different keys", async () => {
+    const events: string[] = [];
+    const slow = withLock("k1", async () => { events.push("start k1"); await sleep(30); events.push("end k1"); });
+    const fast = withLock("k2", async () => { events.push("start k2"); events.push("end k2"); });
+    await Promise.all([slow, fast]);
+    expect(events.indexOf("end k2")).toBeLessThan(events.indexOf("end k1"));
+  });
+
+  it("lets the next call run after one fails, and still reports the failure", async () => {
+    const failing = withLock("fail", async () => { throw new Error("boom"); });
+    const next = withLock("fail", async () => "ok");
+    await expect(failing).rejects.toThrow("boom");
+    await expect(next).resolves.toBe("ok");
+  });
+});
+
 describe("create-synthetics-browser-test", () => {
   const input = {
     name: "Throwaway",
@@ -64,6 +96,19 @@ describe("create-synthetics-browser-test", () => {
     expect(createSyntheticsBrowserTestSchema.safeParse({ ...input, steps: [] }).success).toBe(false);
     expect(createSyntheticsBrowserTestSchema.safeParse({ ...input, name: "" }).success).toBe(false);
     expect(createSyntheticsBrowserTestSchema.safeParse({ ...input, startUrl: "" }).success).toBe(false);
+  });
+});
+
+describe("set-synthetics-test-status schema", () => {
+  it("accepts live or paused for one or more tests", () => {
+    expect(setSyntheticsTestStatusSchema.safeParse({ publicIds: ["abc-def-ghi"], status: "live" }).success).toBe(true);
+    expect(setSyntheticsTestStatusSchema.safeParse({ publicIds: ["a-b-c", "d-e-f"], status: "paused" }).success).toBe(true);
+  });
+
+  it("rejects an empty id list, an empty id and an unknown status", () => {
+    expect(setSyntheticsTestStatusSchema.safeParse({ publicIds: [], status: "live" }).success).toBe(false);
+    expect(setSyntheticsTestStatusSchema.safeParse({ publicIds: [""], status: "live" }).success).toBe(false);
+    expect(setSyntheticsTestStatusSchema.safeParse({ publicIds: ["abc-def-ghi"], status: "stopped" }).success).toBe(false);
   });
 });
 

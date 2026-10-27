@@ -2,6 +2,28 @@ import { z } from "zod/v4";
 import { syntheticsApi } from "../client.js";
 import { assertWriteAllowed } from "./utils.js";
 
+// --- Serialization of read-merge-save sequences ---
+
+const locks = new Map<string, Promise<void>>();
+
+/**
+ * Runs `fn` after every earlier call with the same key has settled, so two edits of the same test (or
+ * variable) in this server cannot read the same definition and overwrite each other. A failed call does
+ * not block the next one. This does not protect against edits made elsewhere, such as in the Datadog UI:
+ * the API has no revision check.
+ */
+export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const previous = locks.get(key) ?? Promise.resolve();
+  const run = previous.then(() => fn());
+  const tail = run.then(() => undefined, () => undefined);
+  locks.set(key, tail);
+  try {
+    return await run;
+  } finally {
+    if (locks.get(key) === tail) locks.delete(key);
+  }
+}
+
 // --- Browser tests ---
 
 export const getSyntheticsBrowserTestSchema = z.object({
@@ -194,7 +216,11 @@ export function withoutReadOnlyStepFields(step: Record<string, any>): Record<str
   return rest;
 }
 
-export async function updateSyntheticsBrowserTest(params: z.infer<typeof updateSyntheticsBrowserTestSchema>) {
+export function updateSyntheticsBrowserTest(params: z.infer<typeof updateSyntheticsBrowserTestSchema>) {
+  return withLock(`browser-test:${params.publicId}`, () => updateSyntheticsBrowserTestUnlocked(params));
+}
+
+async function updateSyntheticsBrowserTestUnlocked(params: z.infer<typeof updateSyntheticsBrowserTestSchema>) {
   if (params.steps && params.stepUpdates) {
     throw new Error("Pass either steps (full replacement) or stepUpdates (targeted edits), not both");
   }
@@ -339,6 +365,41 @@ export async function createSyntheticsBrowserTest(params: z.infer<typeof createS
   };
 }
 
+// --- Test status (pause / schedule) ---
+
+export const setSyntheticsTestStatusSchema = z.object({
+  publicIds: z.array(z.string().min(1)).min(1).max(50).describe("Public IDs of the tests to change. Example: [\"abc-def-ghi\"]"),
+  status: z.enum(["live", "paused"]).describe("live = resume the test's schedule; paused = stop its scheduled runs"),
+});
+
+/**
+ * Uses Datadog's dedicated status endpoint, which changes only the pause status. Saving the whole test
+ * through update-synthetics-browser-test would also regenerate every step ID. Works for any test type.
+ */
+export async function setSyntheticsTestStatus(params: z.infer<typeof setSyntheticsTestStatusSchema>) {
+  assertWriteAllowed();
+
+  const results: { publicId: string; ok: boolean; error?: string }[] = [];
+  for (const publicId of params.publicIds) {
+    try {
+      const ok = await syntheticsApi.updateTestPauseStatus({
+        publicId,
+        body: { newStatus: params.status as any },
+      });
+      results.push({ publicId, ok });
+    } catch (error) {
+      results.push({ publicId, ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  return {
+    requestedStatus: params.status,
+    succeeded: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok).length,
+    results,
+  };
+}
+
 // --- Global variables ---
 
 export const listSyntheticsGlobalVariablesSchema = z.object({});
@@ -389,7 +450,11 @@ export const editSyntheticsGlobalVariableSchema = z.object({
   value: z.string().optional().describe("New value. Required when editing a secure variable, because its current value cannot be read back"),
 });
 
-export async function editSyntheticsGlobalVariable(params: z.infer<typeof editSyntheticsGlobalVariableSchema>) {
+export function editSyntheticsGlobalVariable(params: z.infer<typeof editSyntheticsGlobalVariableSchema>) {
+  return withLock(`global-variable:${params.variableId}`, () => editSyntheticsGlobalVariableUnlocked(params));
+}
+
+async function editSyntheticsGlobalVariableUnlocked(params: z.infer<typeof editSyntheticsGlobalVariableSchema>) {
   assertWriteAllowed();
   const current = await syntheticsApi.getGlobalVariable({ variableId: params.variableId });
 

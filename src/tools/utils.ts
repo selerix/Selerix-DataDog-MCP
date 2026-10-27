@@ -28,8 +28,21 @@ export function extractDatadogError(body: unknown): unknown {
   }
 }
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Patterns that match the actual secret values, so a key echoed in an error message is removed, not just
+ * the variable name. Values shorter than 8 characters are skipped to avoid blanking ordinary text
+ * (the token-stats script runs the server with placeholder keys).
+ */
+export function secretValuePatterns(secrets: readonly string[]): RegExp[] {
+  return secrets.filter((s) => s.length >= 8).map((s) => new RegExp(escapeRegExp(s), "g"));
+}
+
 export const wrapToolHandler = createWrapToolHandler({
-  redactionPatterns: [/DD_API_KEY/i, /DD_APP_KEY/i],
+  redactionPatterns: [/DD_API_KEY/i, /DD_APP_KEY/i, ...secretValuePatterns([config.apiKey, config.appKey])],
   errorExtractors: [
     {
       match: (error) => error instanceof WriteBlockedError,

@@ -51,20 +51,35 @@ function sanitizeText(text: string, patterns: readonly RegExp[]): string {
   return result;
 }
 
+// Selerix change: walk nested arrays/objects too. Upstream only cleaned top-level strings, so a value
+// inside e.g. `datadogError: [...]` was returned unredacted.
+function sanitizeValue(value: unknown, patterns: readonly RegExp[]): unknown {
+  if (typeof value === "string") return sanitizeText(value, patterns);
+  if (Array.isArray(value)) return value.map((v) => sanitizeValue(v, patterns));
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, sanitizeValue(v, patterns)]),
+    );
+  }
+  return value;
+}
+
 function sanitizeStructured(data: StructuredError, patterns: readonly RegExp[]): StructuredError {
   const out: StructuredError = { message: sanitizeText(data.message, patterns) };
   for (const [key, value] of Object.entries(data)) {
     if (key === "message") continue;
-    out[key] = typeof value === "string" ? sanitizeText(value, patterns) : value;
+    out[key] = sanitizeValue(value, patterns);
   }
   return out;
 }
 
 /** Build a wrapToolHandler tailored to a consumer MCP server. */
 export function createWrapToolHandler(opts: CreateWrapToolHandlerOptions = {}) {
+  // Selerix change: caller patterns run first, so an exact secret value is removed whole before the
+  // generic word patterns (api key, token, ...) can partially match inside it.
   const patterns: RegExp[] = [
-    ...DEFAULT_REDACTION_PATTERNS,
     ...(opts.redactionPatterns ?? []),
+    ...DEFAULT_REDACTION_PATTERNS,
   ];
   const extractors = opts.errorExtractors ?? [];
   const fieldParam = opts.extractFieldsParam ?? "extractFields";

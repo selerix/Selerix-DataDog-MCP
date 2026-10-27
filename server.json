@@ -6,13 +6,13 @@
     "url": "https://github.com/selerix/Selerix-DataDog-MCP",
     "source": "github"
   },
-  "version": "1.19.2",
+  "version": "1.21.1",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://pkgs.dev.azure.com/selerix/_packaging/Selerix/npm/registry/",
       "identifier": "@selerix/datadog-mcp",
-      "version": "1.19.2",
+      "version": "1.21.1",
       "transport": {
         "type": "stdio"
       },
