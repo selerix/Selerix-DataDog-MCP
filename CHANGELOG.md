@@ -20,7 +20,8 @@ First Selerix release. Based on upstream `us-all/datadog-mcp-server` 1.21.1.
 - Package renamed to `@selerix/datadog-mcp`, published to the Selerix Azure Artifacts feed (`publishConfig.registry`). `server.json` manifest updated to match; a unit test keeps its versions in sync with `package.json`.
 - `@us-all/mcp-toolkit` is vendored into `src/vendor/mcp-toolkit/` (MIT, license included) instead of being an npm dependency.
 - Error redaction now removes the configured `DD_API_KEY` / `DD_APP_KEY` values and walks nested error fields.
-- `update-synthetics-browser-test` and `edit-synthetics-global-variable` serialize their get-merge-save sequence per test / variable.
+- `update-synthetics-browser-test` and `edit-synthetics-global-variable` serialize their get-merge-save sequence per test / variable, and `set-synthetics-test-status` uses the same per-test lock so an edit cannot undo a pause.
+- Error text returned as data (per-test errors of `set-synthetics-test-status`, aggregation `caveats`) is redacted like thrown errors.
 - HTTP transport (`MCP_TRANSPORT=http`): fixed the localhost `Host` allowlist for IPv6 (`MCP_HTTP_HOST=::1`); requests addressed to `[::1]:port` were rejected with 403 even with a valid token. `dotenv` no longer prints its banner to stdout.
 - CI token budget raised from 30000 to 35000 and made adjustable through the `TOKEN_BUDGET` repository variable; the token-stats script ignores a local `.env` `DD_TOOLS` / `DD_DISABLE`.
 - Upstream's public npm and container publish workflows are disabled (`*.yml.disabled`).

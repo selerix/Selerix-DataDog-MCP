@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { syntheticsApi } from "../client.js";
-import { assertWriteAllowed } from "./utils.js";
+import { assertWriteAllowed, redactText } from "./utils.js";
 
 // --- Serialization of read-merge-save sequences ---
 
@@ -382,13 +382,18 @@ export async function setSyntheticsTestStatus(params: z.infer<typeof setSyntheti
   const results: { publicId: string; ok: boolean; error?: string }[] = [];
   for (const publicId of params.publicIds) {
     try {
-      const ok = await syntheticsApi.updateTestPauseStatus({
-        publicId,
-        body: { newStatus: params.status as any },
-      });
+      // Same lock as update-synthetics-browser-test: an edit that read the test before this status change
+      // would otherwise save its stale status afterwards and silently undo the pause or resume.
+      const ok = await withLock(`browser-test:${publicId}`, () =>
+        syntheticsApi.updateTestPauseStatus({
+          publicId,
+          body: { newStatus: params.status as any },
+        }),
+      );
       results.push({ publicId, ok });
     } catch (error) {
-      results.push({ publicId, ok: false, error: error instanceof Error ? error.message : String(error) });
+      // Returned as data, so the wrapper's error redaction never sees it.
+      results.push({ publicId, ok: false, error: redactText(error instanceof Error ? error.message : String(error)) });
     }
   }
 

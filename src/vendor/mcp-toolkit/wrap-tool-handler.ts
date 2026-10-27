@@ -73,14 +73,24 @@ function sanitizeStructured(data: StructuredError, patterns: readonly RegExp[]):
   return out;
 }
 
+// Selerix change: caller patterns run first, so an exact secret value is removed whole before the
+// generic word patterns (api key, token, ...) can partially match inside it.
+function buildPatterns(opts: CreateWrapToolHandlerOptions): RegExp[] {
+  return [...(opts.redactionPatterns ?? []), ...DEFAULT_REDACTION_PATTERNS];
+}
+
+/**
+ * Selerix addition: the same redaction as the wrapper, for text that is returned as data instead of
+ * thrown (per-item errors, caveat lists), which the wrapper's error path never sees.
+ */
+export function createTextSanitizer(opts: CreateWrapToolHandlerOptions = {}): (text: string) => string {
+  const patterns = buildPatterns(opts);
+  return (text: string) => sanitizeText(text, patterns);
+}
+
 /** Build a wrapToolHandler tailored to a consumer MCP server. */
 export function createWrapToolHandler(opts: CreateWrapToolHandlerOptions = {}) {
-  // Selerix change: caller patterns run first, so an exact secret value is removed whole before the
-  // generic word patterns (api key, token, ...) can partially match inside it.
-  const patterns: RegExp[] = [
-    ...(opts.redactionPatterns ?? []),
-    ...DEFAULT_REDACTION_PATTERNS,
-  ];
+  const patterns = buildPatterns(opts);
   const extractors = opts.errorExtractors ?? [];
   const fieldParam = opts.extractFieldsParam ?? "extractFields";
 

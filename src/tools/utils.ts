@@ -1,4 +1,4 @@
-import { createWrapToolHandler } from "../vendor/mcp-toolkit/index.js";
+import { createTextSanitizer, createWrapToolHandler } from "../vendor/mcp-toolkit/index.js";
 import { config } from "../config.js";
 
 export class WriteBlockedError extends Error {
@@ -41,8 +41,15 @@ export function secretValuePatterns(secrets: readonly string[]): RegExp[] {
   return secrets.filter((s) => s.length >= 8).map((s) => new RegExp(escapeRegExp(s), "g"));
 }
 
-export const wrapToolHandler = createWrapToolHandler({
+const redactionOptions = {
   redactionPatterns: [/DD_API_KEY/i, /DD_APP_KEY/i, ...secretValuePatterns([config.apiKey, config.appKey])],
+};
+
+/** Redacts secrets from text that is returned as data instead of thrown (per-item errors, caveat lists). */
+export const redactText = createTextSanitizer(redactionOptions);
+
+export const wrapToolHandler = createWrapToolHandler({
+  ...redactionOptions,
   errorExtractors: [
     {
       match: (error) => error instanceof WriteBlockedError,

@@ -18,6 +18,7 @@ export {
 } from "./registry.js";
 export {
   createWrapToolHandler,
+  createTextSanitizer,
   wrapToolHandler,
   DEFAULT_REDACTION_PATTERNS,
   type CreateWrapToolHandlerOptions,

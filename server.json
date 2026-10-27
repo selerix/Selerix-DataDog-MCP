@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.us-all/datadog",
-  "description": "Datadog MCP — 175 tools for metrics, monitors, logs, APM, RUM, incidents, CI/CD, Synthetics browser tests, fleet",
+  "description": "Datadog MCP: 175 tools for metrics, monitors, logs, APM, RUM, incidents, Synthetics browser tests",
   "repository": {
     "url": "https://github.com/selerix/Selerix-DataDog-MCP",
     "source": "github"

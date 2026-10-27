@@ -14,6 +14,11 @@ describe("server.json", () => {
     expect(server.packages[0].version).toBe(pkg.version);
   });
 
+  it("keeps the description within the 100 characters the server schema allows", () => {
+    expect([...server.description].length).toBeLessThanOrEqual(100);
+    expect(server.description.length).toBeGreaterThan(0);
+  });
+
   it("points at this package and the Selerix registry it is published to", () => {
     expect(server.packages[0].identifier).toBe(pkg.name);
     expect(server.packages[0].registryBaseUrl).toBe(pkg.publishConfig.registry);

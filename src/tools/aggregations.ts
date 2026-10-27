@@ -3,6 +3,7 @@ import { v2 } from "@datadog/datadog-api-client";
 import { aggregate } from "../vendor/mcp-toolkit/index.js";
 import { monitorsApi, eventsApi, downtimesApi, slosApi, sloCorrectionsApi, incidentsApi, logsApi } from "../client.js";
 import { applyExtractFields, extractFieldsDescription } from "./extract-fields.js";
+import { redactText } from "./utils.js";
 
 const ef = z.string().optional().describe(extractFieldsDescription);
 
@@ -80,7 +81,7 @@ export async function analyzeMonitorState(params: z.infer<typeof analyzeMonitorS
         : 0,
       activeDowntimesCount: downtimes?.length ?? 0,
     },
-    caveats,
+    caveats: caveats.map(redactText),
   };
 }
 
@@ -185,7 +186,7 @@ export async function sloComplianceSnapshot(params: z.infer<typeof sloCompliance
     monitors,
     errorBudgetRemainingPct,
     status,
-    caveats,
+    caveats: caveats.map(redactText),
   };
 }
 
@@ -380,6 +381,6 @@ export async function incidentTriageSnapshot(params: z.infer<typeof incidentTria
       logSpikeDetected: hasSpike,
       service,
     },
-    caveats,
+    caveats: caveats.map(redactText),
   };
 }
