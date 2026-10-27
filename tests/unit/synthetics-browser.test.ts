@@ -42,4 +42,10 @@ describe("update-synthetics-browser-test schema", () => {
   it("defaults dryRun to false", () => {
     expect(updateSyntheticsBrowserTestSchema.parse({ publicId: "abc-def-ghi" }).dryRun).toBe(false);
   });
+
+  it("rejects an empty startUrl or name instead of silently ignoring it", () => {
+    expect(updateSyntheticsBrowserTestSchema.safeParse({ publicId: "abc-def-ghi", startUrl: "" }).success).toBe(false);
+    expect(updateSyntheticsBrowserTestSchema.safeParse({ publicId: "abc-def-ghi", name: "" }).success).toBe(false);
+    expect(updateSyntheticsBrowserTestSchema.safeParse({ publicId: "abc-def-ghi", startUrl: "https://x.test" }).success).toBe(true);
+  });
 });

@@ -111,6 +111,8 @@ export async function getSyntheticsBrowserResult(params: z.infer<typeof getSynth
     checkTime: r.checkTime,
     probeDc: r.probeDc,
     passed: r.result?.passed,
+    // The SDK doc says seconds, but the API returns milliseconds here (verified live: 17936 matches the
+    // 17936 ms in get-synthetics-browser-results for the same run). Do not multiply by 1000.
     durationMs: r.result?.duration,
     startUrl: r.result?.startUrl,
     browserType: r.result?.browserType,
@@ -138,12 +140,12 @@ const stepUpdateSchema = z.object({
 
 export const updateSyntheticsBrowserTestSchema = z.object({
   publicId: z.string().describe("Browser test public ID to update. Example: abc-def-ghi"),
-  name: z.string().optional().describe("New test name"),
+  name: z.string().min(1).optional().describe("New test name"),
   message: z.string().optional().describe("New notification message"),
   tags: z.array(z.string()).optional().describe("New tags (replaces the existing list)"),
   status: z.enum(["live", "paused"]).optional().describe("New test status"),
   locations: z.array(z.string()).optional().describe("New test locations (replaces the existing list)"),
-  startUrl: z.string().optional().describe("New start URL"),
+  startUrl: z.string().min(1).optional().describe("New start URL"),
   stepUpdates: z.array(stepUpdateSchema).optional().describe("Targeted edits to individual steps. Cannot be combined with steps"),
   steps: z.array(z.record(z.string(), z.any())).optional().describe("Full replacement list of steps. Cannot be combined with stepUpdates"),
   configVariables: z.array(z.record(z.string(), z.any())).optional().describe("Full replacement of config variables, e.g. references to global variables. Example: [{\"name\":\"USERNAME\",\"type\":\"global\",\"id\":\"<global-variable-id>\"}]"),
