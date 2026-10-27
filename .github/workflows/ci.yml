@@ -37,7 +37,7 @@ jobs:
         if: matrix.node-version == 22
         run: pnpm run token-stats
         env:
-          TOKEN_BUDGET: 30000
+          TOKEN_BUDGET: 35000
 
   secret-scan:
     runs-on: ubuntu-latest

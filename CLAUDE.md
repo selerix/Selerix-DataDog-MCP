@@ -22,7 +22,7 @@ pnpm test             # vitest run (tests/**/*.test.ts, forked pool)
 pnpm vitest run tests/unit/utils.test.ts          # single file
 pnpm vitest run -t "name fragment"                 # single test by name
 pnpm run smoke        # live read-only calls against a real Datadog account; needs .env, builds first
-pnpm run token-stats  # measures tool-schema token size; CI fails above TOKEN_BUDGET=30000
+pnpm run token-stats  # measures tool-schema token size; CI fails above TOKEN_BUDGET=35000
 node dist/index.js    # run the server
 ```
 
@@ -56,7 +56,7 @@ Selerix additions live in `src/tools/synthetics-browser.ts` (registered in the s
 
 The read tools and the dry run were verified live against the Selerix org; the actual save paths (`update-synthetics-browser-test` without `dryRun`, `edit-synthetics-global-variable`) have not been exercised. Not covered: creating browser tests, creating/deleting global variables, mobile tests.
 
-New tools go in `index.ts` under the right `currentCategory` and into `EXPECTED_TOOLS` (also bump the count assertion in `tool-registration.test.ts`). `pnpm run token-stats` reports ~31.6k tokens for the full 173-tool default set, above the `TOKEN_BUDGET=30000` guard in `ci.yml`; raise the budget or trim descriptions before relying on CI.
+New tools go in `index.ts` under the right `currentCategory` and into `EXPECTED_TOOLS` (also bump the count assertion in `tool-registration.test.ts`). `pnpm run token-stats` reports ~31.6k tokens for the full 173-tool default set; the `TOKEN_BUDGET` guard in `ci.yml` was raised from upstream's 30000 to 35000 for the Selerix tools, so raise it again (or trim descriptions) when new tools push the estimate past it.
 
 ## Docs that go stale
 
