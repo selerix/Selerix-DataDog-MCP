@@ -34,6 +34,9 @@
   ],
   "author": "us-all",
   "license": "MIT",
+  "publishConfig": {
+    "registry": "https://pkgs.dev.azure.com/selerix/_packaging/Selerix/npm/registry/"
+  },
   "packageManager": "pnpm@10.30.2",
   "pnpm": {
     "overrides": {
