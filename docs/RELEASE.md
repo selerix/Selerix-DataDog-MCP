@@ -27,7 +27,7 @@ Status at 1.22.0 (prepared 2026-10-26): **ready to publish once the organization
 - 111 packages in the production tree. Licenses: MIT 97, ISC 7, BSD-2-Clause 3, BSD-3-Clause 2, Apache-2.0 1 (the Datadog client), MIT AND Zlib 1. No copyleft, no unknown licenses.
 - Vulnerabilities: **0** by `pnpm audit --prod` and by `npm audit --omit=dev` in a clean install of the packed tarball (2026-10-26). Before this release the audit reported 49 advisories (1 critical, 16 high), all in `@modelcontextprotocol/sdk` 1.29.0, `zod` 4.4.2 and the SDK's transitive web-server packages (express, hono, body-parser, ip-address, fast-uri, ...); they were resolved by updating within the existing ranges.
 - The Datadog client is held at `~1.59.0` on purpose: newer releases rename the fleet-automation methods (`...V2`; 1.64.0 was tried and `pnpm build` failed in `src/tools/fleet.ts`). A published package has no lockfile, so the range itself has to hold this.
-- `@us-all/mcp-toolkit` 1.3.0 is vendored in `src/vendor/mcp-toolkit/` (MIT, license included) instead of being an npm dependency. It was transcribed from the package's compiled output; the original and the copy returned identical results on 85 comparison cases. Selerix changes to it are marked "Selerix change" in comments (nested redaction, caller patterns first, IPv6 host allowlist for the optional HTTP transport).
+- `@us-all/mcp-toolkit` 1.3.0 is vendored in `src/vendor/mcp-toolkit/` (MIT, license included) instead of being an npm dependency. It was transcribed from the package's compiled output; the original and the copy returned identical results on 85 comparison cases. Selerix changes to it are marked "Selerix change" in comments (nested redaction, caller patterns first, and for the optional HTTP transport an IPv6 host allowlist and a fresh transport per request).
 
 **Known limitations a reviewer should know about**
 - Global variables that are not marked secure in Datadog are returned in clear by `get-synthetics-global-variable` (at the last check none of the org's 10 global variables was marked secure). Datadog never returns secure values.
@@ -35,6 +35,7 @@ Status at 1.22.0 (prepared 2026-10-26): **ready to publish once the organization
 - Setting a paused test live runs it immediately (seen once, within a second).
 - Locks protect against overlapping edits inside one server process only; edits made elsewhere (for example in the Datadog UI) between a read and a save can be overwritten, because the API has no revision check.
 - Deleting a Synthetics test also deletes its monitor in Datadog, but this could not be verified because the app key used for testing cannot read monitors.
+- In the optional HTTP mode (`MCP_TRANSPORT=http`, off by default) requests are processed one at a time, so a slow tool call delays other clients. stdio is the default and the intended mode.
 - Redaction removes the configured key values and common secret words; it is not a general data-loss-prevention filter, and tool results (as opposed to errors) are returned as Datadog sends them.
 - The package's own dependencies come from public npm. The Azure feed needs npmjs as an upstream source, or consumers need access to public npm.
 

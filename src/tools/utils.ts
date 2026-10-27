@@ -28,6 +28,33 @@ export function extractDatadogError(body: unknown): unknown {
   }
 }
 
+// --- Serialization of read-merge-save sequences ---
+
+const locks = new Map<string, Promise<void>>();
+
+/** Lock key shared by every tool that rewrites or changes the status of one Synthetics test (any type). */
+export function testLockKey(publicId: string): string {
+  return `synthetics-test:${publicId}`;
+}
+
+/**
+ * Runs `fn` after every earlier call with the same key has settled, so two edits of the same test (or
+ * variable) in this server cannot read the same definition and overwrite each other. A failed call does
+ * not block the next one. This does not protect against edits made elsewhere, such as in the Datadog UI:
+ * the API has no revision check.
+ */
+export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const previous = locks.get(key) ?? Promise.resolve();
+  const run = previous.then(() => fn());
+  const tail = run.then(() => undefined, () => undefined);
+  locks.set(key, tail);
+  try {
+    return await run;
+  } finally {
+    if (locks.get(key) === tail) locks.delete(key);
+  }
+}
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

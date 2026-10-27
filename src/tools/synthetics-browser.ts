@@ -1,28 +1,9 @@
 import { z } from "zod/v4";
 import { syntheticsApi } from "../client.js";
-import { assertWriteAllowed, redactText } from "./utils.js";
+import { assertWriteAllowed, redactText, testLockKey, withLock } from "./utils.js";
 
-// --- Serialization of read-merge-save sequences ---
-
-const locks = new Map<string, Promise<void>>();
-
-/**
- * Runs `fn` after every earlier call with the same key has settled, so two edits of the same test (or
- * variable) in this server cannot read the same definition and overwrite each other. A failed call does
- * not block the next one. This does not protect against edits made elsewhere, such as in the Datadog UI:
- * the API has no revision check.
- */
-export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const previous = locks.get(key) ?? Promise.resolve();
-  const run = previous.then(() => fn());
-  const tail = run.then(() => undefined, () => undefined);
-  locks.set(key, tail);
-  try {
-    return await run;
-  } finally {
-    if (locks.get(key) === tail) locks.delete(key);
-  }
-}
+// The lock helpers live in utils.ts so every tool that rewrites a test uses the same ones; re-exported here.
+export { withLock, testLockKey };
 
 // --- Browser tests ---
 
@@ -217,7 +198,7 @@ export function withoutReadOnlyStepFields(step: Record<string, any>): Record<str
 }
 
 export function updateSyntheticsBrowserTest(params: z.infer<typeof updateSyntheticsBrowserTestSchema>) {
-  return withLock(`browser-test:${params.publicId}`, () => updateSyntheticsBrowserTestUnlocked(params));
+  return withLock(testLockKey(params.publicId), () => updateSyntheticsBrowserTestUnlocked(params));
 }
 
 async function updateSyntheticsBrowserTestUnlocked(params: z.infer<typeof updateSyntheticsBrowserTestSchema>) {
@@ -384,7 +365,7 @@ export async function setSyntheticsTestStatus(params: z.infer<typeof setSyntheti
     try {
       // Same lock as update-synthetics-browser-test: an edit that read the test before this status change
       // would otherwise save its stale status afterwards and silently undo the pause or resume.
-      const ok = await withLock(`browser-test:${publicId}`, () =>
+      const ok = await withLock(testLockKey(publicId), () =>
         syntheticsApi.updateTestPauseStatus({
           publicId,
           body: { newStatus: params.status as any },

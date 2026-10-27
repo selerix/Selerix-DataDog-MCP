@@ -99,7 +99,32 @@ export async function startMcpServer(
   }
 
   const isLocalhost = LOCALHOST_HOSTS.has(host);
-  let transport: StreamableHTTPServerTransport | undefined;
+  let allowedHosts: string[] | undefined;
+
+  // Selerix change: upstream connected one stateless transport at startup and reused it for every request.
+  // The SDK rejects that (HTTP 500 from the second request on). A server can only be connected to one
+  // transport at a time and a stateless transport serves one request, so each request gets a fresh
+  // transport, connected for the length of that request, and requests are handled one at a time.
+  let queue: Promise<void> = Promise.resolve();
+  const handleMcpRequest = (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const run = queue.then(async () => {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableDnsRebindingProtection: allowedHosts !== undefined,
+        allowedHosts,
+      });
+      await server.connect(transport);
+      const finished = new Promise<void>((resolve) => res.once("close", () => resolve()));
+      try {
+        await transport.handleRequest(req, res);
+        await finished;
+      } finally {
+        await transport.close().catch(() => {});
+      }
+    });
+    queue = run.catch(() => {});
+    return run;
+  };
 
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
@@ -119,11 +144,7 @@ export async function startMcpServer(
           return;
         }
       }
-      if (!transport) {
-        writeJson(res, 503, { error: "transport not ready" });
-        return;
-      }
-      await transport.handleRequest(req, res);
+      await handleMcpRequest(req, res);
     } catch (err) {
       if (!res.headersSent) {
         writeJson(res, 500, {
@@ -141,16 +162,9 @@ export async function startMcpServer(
       try {
         const address = httpServer.address();
         const boundPort = typeof address === "object" && address ? address.port : port;
-        const allowedHosts =
+        allowedHosts =
           opts.allowedHosts ??
           (isLocalhost ? localhostAllowedHosts(host, boundPort) : undefined);
-
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined,
-          enableDnsRebindingProtection: allowedHosts !== undefined,
-          allowedHosts,
-        });
-        await server.connect(transport);
 
         const authState = skipAuth ? " (auth disabled)" : "";
         console.error(`MCP server running on http://${formatHostPort(host, boundPort)}/mcp${authState}`);
@@ -159,7 +173,6 @@ export async function startMcpServer(
           port: boundPort,
           close: () =>
             new Promise<void>((res, rej) => {
-              transport?.close().catch(() => {});
               httpServer.close((err) => (err ? rej(err) : res()));
             }),
         });

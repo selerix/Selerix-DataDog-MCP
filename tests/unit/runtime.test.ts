@@ -52,6 +52,58 @@ describe("HTTP transport", () => {
     }
   });
 
+  it("serves many requests, one after another (a stateless transport cannot be reused)", async () => {
+    const server = new McpServer({ name: "t", version: "0" });
+    server.tool("ping", "ping", {}, async () => ({ content: [{ type: "text" as const, text: "pong" }] }));
+    const handle = (await startMcpServer(server, { transport: "http", port: 0, host: "127.0.0.1", token: "tok" })) as HttpHandle;
+    try {
+      const url = `http://127.0.0.1:${handle.port}/mcp`;
+      const rpc = (id: number, method: string, params?: unknown) =>
+        fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: "Bearer tok" },
+          body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+        });
+      const first = await rpc(1, "initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "t", version: "0" } });
+      expect(first.status).toBe(200);
+      await first.text();
+      const second = await rpc(2, "tools/list");
+      expect(second.status).toBe(200);
+      expect(await second.text()).toContain("ping");
+      const third = await rpc(3, "tools/call", { name: "ping", arguments: {} });
+      expect(third.status).toBe(200);
+      expect(await third.text()).toContain("pong");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("handles concurrent requests without mixing up the responses", async () => {
+    const server = new McpServer({ name: "t", version: "0" });
+    server.tool("ping", "ping", {}, async () => ({ content: [{ type: "text" as const, text: "pong" }] }));
+    const handle = (await startMcpServer(server, { transport: "http", port: 0, host: "127.0.0.1", token: "tok" })) as HttpHandle;
+    try {
+      const url = `http://127.0.0.1:${handle.port}/mcp`;
+      const bodies = await Promise.all(
+        [11, 12, 13, 14, 15].map(async (id) => {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: "Bearer tok" },
+            body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "ping", arguments: {} } }),
+          });
+          return { id, status: res.status, text: await res.text() };
+        }),
+      );
+      for (const b of bodies) {
+        expect(b.status).toBe(200);
+        expect(b.text).toContain(`"id":${b.id}`);
+        expect(b.text).toContain("pong");
+      }
+    } finally {
+      await handle.close();
+    }
+  });
+
   it("accepts requests addressed to http://[::1]:port when bound to IPv6 loopback", async () => {
     const handle = await start("::1");
     if (!handle) return; // IPv6 loopback not available on this machine

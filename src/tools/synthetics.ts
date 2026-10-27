@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { syntheticsApi } from "../client.js";
-import { assertWriteAllowed } from "./utils.js";
+import { assertWriteAllowed, testLockKey, withLock } from "./utils.js";
 
 export const listSyntheticsSchema = z.object({
   pageSize: z.coerce.number().optional().default(100).describe("Number of tests per page"),
@@ -150,7 +150,13 @@ export const updateSyntheticsTestSchema = z.object({
   assertions: z.array(z.record(z.string(), z.any())).optional().describe("New assertions"),
 });
 
-export async function updateSyntheticsTest(params: z.infer<typeof updateSyntheticsTestSchema>) {
+export function updateSyntheticsTest(params: z.infer<typeof updateSyntheticsTestSchema>) {
+  // Selerix change: same per-test lock as pause/schedule and browser-test edits. This edit re-sends the
+  // status it read, so without the lock it could restart a test that was paused in between.
+  return withLock(testLockKey(params.publicId), () => updateSyntheticsTestUnlocked(params));
+}
+
+async function updateSyntheticsTestUnlocked(params: z.infer<typeof updateSyntheticsTestSchema>) {
   assertWriteAllowed();
   const current = await syntheticsApi.getAPITest({ publicId: params.publicId });
 

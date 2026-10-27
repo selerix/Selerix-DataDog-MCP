@@ -21,6 +21,8 @@ First Selerix release. Based on upstream `us-all/datadog-mcp-server` 1.21.1.
 - `@us-all/mcp-toolkit` is vendored into `src/vendor/mcp-toolkit/` (MIT, license included) instead of being an npm dependency.
 - Error redaction now removes the configured `DD_API_KEY` / `DD_APP_KEY` values and walks nested error fields.
 - `update-synthetics-browser-test` and `edit-synthetics-global-variable` serialize their get-merge-save sequence per test / variable, and `set-synthetics-test-status` uses the same per-test lock so an edit cannot undo a pause.
+- `update-synthetics-test` (API tests) takes the same per-test lock, so no tool that rewrites a test can undo a pause.
+- HTTP transport: each request now gets its own transport and requests are handled one at a time. Before, the server answered the first request and then returned HTTP 500 to every later one.
 - Error text returned as data (per-test errors of `set-synthetics-test-status`, aggregation `caveats`) is redacted like thrown errors.
 - HTTP transport (`MCP_TRANSPORT=http`): fixed the localhost `Host` allowlist for IPv6 (`MCP_HTTP_HOST=::1`); requests addressed to `[::1]:port` were rejected with 403 even with a valid token. `dotenv` no longer prints its banner to stdout.
 - CI token budget raised from 30000 to 35000 and made adjustable through the `TOKEN_BUDGET` repository variable; the token-stats script ignores a local `.env` `DD_TOOLS` / `DD_DISABLE`.
