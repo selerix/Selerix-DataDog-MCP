@@ -271,6 +271,74 @@ export async function updateSyntheticsBrowserTest(params: z.infer<typeof updateS
   };
 }
 
+export const createSyntheticsBrowserTestSchema = z.object({
+  name: z.string().min(1).describe("Test name. Example: Login smoke test"),
+  startUrl: z.string().min(1).describe("URL the test starts on. Example: https://www.example.com"),
+  steps: z.array(z.record(z.string(), z.any())).min(1).describe(
+    "Recorded steps, in order. Example: [{\"type\":\"goToUrl\",\"name\":\"Open page\",\"params\":{\"value\":\"https://www.example.com\"}},{\"type\":\"wait\",\"name\":\"Wait 5 sec\",\"params\":{\"value\":5}}]",
+  ),
+  locations: z.array(z.string()).optional().default(["aws:us-east-2"]).describe("Test locations. Default: [\"aws:us-east-2\"]"),
+  message: z.string().optional().default("").describe("Notification message"),
+  tags: z.array(z.string()).optional().describe("Tags for the test. Example: [\"env:sandbox\"]"),
+  status: z.enum(["live", "paused"]).optional().default("paused").describe("Initial status. Default: paused, so a new test does not run or alert until you set it live"),
+  tickEvery: z.coerce.number().optional().default(3600).describe("Run frequency in seconds (minimum 300). Default: 3600"),
+  deviceIds: z.array(z.string()).optional().default(["chrome.laptop_large"]).describe("Devices to run on. Default: [\"chrome.laptop_large\"]"),
+  dryRun: z.boolean().optional().default(false).describe("Preview the test that would be created without creating it; does not require DD_ALLOW_WRITE"),
+});
+
+export function buildBrowserTestBody(params: z.infer<typeof createSyntheticsBrowserTestSchema>) {
+  return {
+    name: params.name,
+    type: "browser" as const,
+    message: params.message ?? "",
+    tags: params.tags ?? [],
+    status: params.status,
+    locations: params.locations,
+    config: {
+      request: { method: "GET" as const, url: params.startUrl },
+      assertions: [],
+    },
+    options: {
+      deviceIds: params.deviceIds,
+      tickEvery: params.tickEvery,
+      minLocationFailed: 1,
+      retry: { count: 0, interval: 300 },
+    },
+    // New steps carry no publicId; Datadog assigns them.
+    steps: params.steps.map(withoutReadOnlyStepFields),
+  };
+}
+
+export async function createSyntheticsBrowserTest(params: z.infer<typeof createSyntheticsBrowserTestSchema>) {
+  if (!params.dryRun) assertWriteAllowed();
+  const body = buildBrowserTestBody(params);
+
+  if (params.dryRun) {
+    return {
+      dryRun: true,
+      created: false,
+      name: body.name,
+      status: body.status,
+      startUrl: params.startUrl,
+      locations: body.locations,
+      tickEvery: body.options.tickEvery,
+      stepCount: body.steps.length,
+      steps: body.steps.map((s, index) => ({ index, type: s.type, name: s.name, params: s.params })),
+    };
+  }
+
+  const response = await syntheticsApi.createSyntheticsBrowserTest({ body: body as any });
+  return {
+    dryRun: false,
+    created: true,
+    publicId: response.publicId,
+    name: response.name,
+    status: response.status,
+    monitorId: response.monitorId,
+    stepCount: response.steps?.length ?? 0,
+  };
+}
+
 // --- Global variables ---
 
 export const listSyntheticsGlobalVariablesSchema = z.object({});

@@ -56,6 +56,7 @@ import {
   getSyntheticsBrowserResultsSchema, getSyntheticsBrowserResults,
   getSyntheticsBrowserResultSchema, getSyntheticsBrowserResult,
   updateSyntheticsBrowserTestSchema, updateSyntheticsBrowserTest,
+  createSyntheticsBrowserTestSchema, createSyntheticsBrowserTest,
   listSyntheticsGlobalVariablesSchema, listSyntheticsGlobalVariables,
   getSyntheticsGlobalVariableSchema, getSyntheticsGlobalVariable,
   editSyntheticsGlobalVariableSchema, editSyntheticsGlobalVariable,
@@ -581,6 +582,13 @@ tool(
   "Update a Synthetics browser test: metadata, start URL, individual steps (stepUpdates) or all steps, config/local variables. Use dryRun to preview. Write-gated unless dryRun",
   updateSyntheticsBrowserTestSchema.shape,
   wrapToolHandler(updateSyntheticsBrowserTest),
+);
+
+tool(
+  "create-synthetics-browser-test",
+  "Create a Synthetics browser test from a start URL and a list of steps. Created paused by default; use dryRun to preview. Write-gated unless dryRun",
+  createSyntheticsBrowserTestSchema.shape,
+  wrapToolHandler(createSyntheticsBrowserTest),
 );
 
 tool(
