@@ -57,6 +57,7 @@ import {
   getSyntheticsBrowserResultSchema, getSyntheticsBrowserResult,
   updateSyntheticsBrowserTestSchema, updateSyntheticsBrowserTest,
   createSyntheticsBrowserTestSchema, createSyntheticsBrowserTest,
+  setSyntheticsTestStatusSchema, setSyntheticsTestStatus,
   listSyntheticsGlobalVariablesSchema, listSyntheticsGlobalVariables,
   getSyntheticsGlobalVariableSchema, getSyntheticsGlobalVariable,
   editSyntheticsGlobalVariableSchema, editSyntheticsGlobalVariable,
@@ -589,6 +590,13 @@ tool(
   "Create a Synthetics browser test from a start URL and a list of steps. Created paused by default; use dryRun to preview. Write-gated unless dryRun",
   createSyntheticsBrowserTestSchema.shape,
   wrapToolHandler(createSyntheticsBrowserTest),
+);
+
+tool(
+  "set-synthetics-test-status",
+  "Pause (status=paused) or schedule/resume (status=live) one or more Synthetics tests of any type without rewriting them. Write-gated",
+  setSyntheticsTestStatusSchema.shape,
+  wrapToolHandler(setSyntheticsTestStatus),
 );
 
 tool(
