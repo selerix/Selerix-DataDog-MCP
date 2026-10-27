@@ -37,7 +37,8 @@ jobs:
         if: matrix.node-version == 22
         run: pnpm run token-stats
         env:
-          TOKEN_BUDGET: 35000
+          # Override without a code change via the repo variable TOKEN_BUDGET (Settings > Secrets and variables > Actions > Variables).
+          TOKEN_BUDGET: ${{ vars.TOKEN_BUDGET || 35000 }}
 
   secret-scan:
     runs-on: ubuntu-latest
