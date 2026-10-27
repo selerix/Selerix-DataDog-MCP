@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0] - 2026-10-26
+
+First Selerix release. Based on upstream `us-all/datadog-mcp-server` 1.21.1.
+
+### Added
+
+- **Synthetics browser-test tools (8)** — `get-synthetics-browser-test`, `get-synthetics-browser-results`, `get-synthetics-browser-result`, `create-synthetics-browser-test`, `update-synthetics-browser-test` (per-step edits, full step replacement, config/local variables, `dryRun`), and `set-synthetics-test-status` (pause / schedule any test without rewriting it).
+- **Synthetics global-variable tools (3)** — `list-synthetics-global-variables`, `get-synthetics-global-variable`, `edit-synthetics-global-variable`.
+- Total tool count 166 → 175. `create-synthetics-browser-test` creates tests paused by default.
+
+### Changed
+
+- Package renamed to `@selerix/datadog-mcp`, published to the Selerix Azure Artifacts feed (`publishConfig.registry`). `server.json` manifest updated to match; a unit test keeps its versions in sync with `package.json`.
+- `@us-all/mcp-toolkit` is vendored into `src/vendor/mcp-toolkit/` (MIT, license included) instead of being an npm dependency.
+- Error redaction now removes the configured `DD_API_KEY` / `DD_APP_KEY` values and walks nested error fields.
+- `update-synthetics-browser-test` and `edit-synthetics-global-variable` serialize their get-merge-save sequence per test / variable.
+- CI token budget raised from 30000 to 35000 and made adjustable through the `TOKEN_BUDGET` repository variable; the token-stats script ignores a local `.env` `DD_TOOLS` / `DD_DISABLE`.
+- Upstream's public npm and container publish workflows are disabled (`*.yml.disabled`).
+
+### Notes
+
+- Saving a browser test through `update-synthetics-browser-test` makes Datadog assign new public IDs to all steps and trim trailing whitespace from the test name (Datadog rejects the read-only step ID on update). `set-synthetics-test-status` does not have this effect.
+- Writes stay off unless `DD_ALLOW_WRITE=true`.
+
 ## [1.20.0] - 2026-05-17
 
 ### Added

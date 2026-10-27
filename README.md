@@ -2,13 +2,9 @@
 
 > **The Datadog MCP that answers _"why is this happening?"_ — not just _"what's the value?"_**
 >
-> Aggregation tools that fold 5–7 sequential API calls into one structured response. Full SLO CRUD. Fleet automation. The widest Datadog API coverage in any MCP — **163 tools** built on the [@us-all MCP standard](https://github.com/us-all/mcp-toolkit/blob/main/STANDARD.md).
+> Aggregation tools that fold 5–7 sequential API calls into one structured response. Full SLO CRUD. Fleet automation. The widest Datadog API coverage in any MCP — **175 tools** built on the [@us-all MCP standard](https://github.com/us-all/mcp-toolkit/blob/main/STANDARD.md).
 
-[![npm](https://img.shields.io/npm/v/@us-all/datadog-mcp)](https://www.npmjs.com/package/@us-all/datadog-mcp)
-[![downloads](https://img.shields.io/npm/dm/@us-all/datadog-mcp)](https://www.npmjs.com/package/@us-all/datadog-mcp)
-[![tools](https://img.shields.io/badge/tools-163-blue)](#full-tool-reference)
-[![@us-all standard](https://img.shields.io/badge/built%20to-%40us--all%20MCP%20standard-blue)](https://github.com/us-all/mcp-toolkit/blob/main/STANDARD.md)
-[![Glama MCP server](https://glama.ai/mcp/servers/us-all/datadog-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/us-all/datadog-mcp-server)
+> **Selerix fork (`@selerix/datadog-mcp`).** Maintained by Selerix, based on the MIT-licensed [`us-all/datadog-mcp-server`](https://github.com/us-all/datadog-mcp-server). It adds Synthetics **browser-test** tools (read tests, results and steps; create tests; edit steps and variables; pause or schedule tests) and global-variable tools, and is published to the Selerix Azure Artifacts feed rather than public npm. See [CHANGELOG.md](./CHANGELOG.md) and [docs/RELEASE.md](./docs/RELEASE.md). The rest of this document is upstream's.
 
 ## What it does that others don't
 
@@ -16,7 +12,7 @@
 - **Full SLO CRUD** — create, update, delete SLOs (and their corrections). The official Bits AI MCP and community alternatives are read-only on SLOs.
 - **Fleet Automation** — 15 tools across deployments and schedules. Only this server.
 - **Status Pages** — 21 tools for full status-page lifecycle (components, degradations, maintenances). Only this server.
-- **Token-efficient by design** — `extractFields` projection, `DD_TOOLS`/`DD_DISABLE` 16-category toggles, and a `search-tools` meta-tool keep LLM context low across 163 tools.
+- **Token-efficient by design** — `extractFields` projection, `DD_TOOLS`/`DD_DISABLE` 16-category toggles, and a `search-tools` meta-tool keep LLM context low across 175 tools.
 - **Apps SDK card** — `slo-compliance-snapshot` renders as a visual card on ChatGPT clients via `_meta["openai/outputTemplate"]`. Claude clients receive the same JSON content (non-breaking).
 - **stdio + Streamable HTTP** — defaults to stdio (Claude Desktop / Code). Set `MCP_TRANSPORT=http` for ChatGPT Apps SDK or remote clients (Bearer auth via `MCP_HTTP_TOKEN`).
 
@@ -34,9 +30,9 @@ Connect the server to Claude Desktop or Claude Code, then paste any of these:
 
 Datadog's official MCP (Bits AI MCP, GA 2026-03-09) is **complementary**, not a replacement:
 
-| | Official Datadog MCP | `@us-all/datadog-mcp` (this) |
+| | Official Datadog MCP | `@selerix/datadog-mcp` (this) |
 |--|----------------------|------------------------------|
-| Tool count | 16+ core toolsets | **163 tools** across full API surface |
+| Tool count | 16+ core toolsets | **175 tools** across full API surface |
 | Deployment | Remote (managed by Datadog) | **Self-host** stdio (npx / Docker / npm) |
 | Auth | Datadog SSO | API + APP key |
 | Sites | Public Datadog sites | **Any site, incl. internal/sovereign**; US5 default |
@@ -51,16 +47,36 @@ Use the official Bits AI MCP for fast managed onboarding and SSO. Use this when 
 
 ## Install
 
+The package is published to the Selerix Azure Artifacts feed, not public npm. Point the `@selerix` scope at the feed once, in your user `.npmrc`, together with whatever authentication your organization uses for Azure Artifacts:
+
+```ini
+@selerix:registry=https://pkgs.dev.azure.com/selerix/_packaging/Selerix/npm/registry/
+```
+
+The package's own dependencies come from public npm, so the feed needs npmjs as an upstream source (or the machine needs access to public npm).
+
+Writes are off by default. Set `DD_ALLOW_WRITE=true` only when you want Claude to create, edit, pause/schedule, trigger or delete things. Use `DD_SITE` for your Datadog site (for example `datadoghq.com`).
+
+### Claude Code
+
+```bash
+claude mcp add datadog -s user \
+  -e DD_API_KEY=<your-api-key> -e DD_APP_KEY=<your-app-key> -e DD_SITE=datadoghq.com \
+  -- npx -y @selerix/datadog-mcp
+```
+
+That stores the keys in plain text in `~/.claude.json`. To keep them out of it, put them in a `.env` file and start the server with `node --env-file=<path-to-.env> <path-to>/dist/index.js` instead (see "Build from source").
+
 ### Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "datadog": {
       "command": "npx",
-      "args": ["-y", "@us-all/datadog-mcp"],
+      "args": ["-y", "@selerix/datadog-mcp"],
       "env": {
         "DD_API_KEY": "<your-api-key>",
         "DD_APP_KEY": "<your-app-key>",
@@ -71,26 +87,13 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Claude Code
-
-```bash
-claude mcp add datadog -s user \
-  -e DD_API_KEY=<your-api-key> -e DD_APP_KEY=<your-app-key> -e DD_SITE=datadoghq.com \
-  -- npx -y @us-all/datadog-mcp
-```
-
-### Docker
-
-```bash
-docker run -e DD_API_KEY=... -e DD_APP_KEY=... -e DD_SITE=datadoghq.com \
-  ghcr.io/us-all/datadog-mcp-server:latest
-```
-
 ### Build from source
 
+Requires Node 22 or newer and pnpm.
+
 ```bash
-git clone https://github.com/us-all/datadog-mcp-server.git
-cd datadog-mcp-server && pnpm install && pnpm build
+git clone https://github.com/selerix/Selerix-DataDog-MCP.git
+cd Selerix-DataDog-MCP && pnpm install && pnpm build
 node dist/index.js
 ```
 
@@ -159,7 +162,7 @@ Read-only entities by URI: `dd://monitor/{id}`, `dd://dashboard/{id}`, `dd://slo
 
 ## Tool reference
 
-163 tools across 16 categories. Use the `search-tools` meta-tool to discover at runtime; the full list is collapsed below.
+175 tools across 16 categories. Use the `search-tools` meta-tool to discover at runtime; the full list is collapsed below.
 
 | Domain | Tools |
 |--------|------:|

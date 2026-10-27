@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 
-dotenv.config();
+// quiet: dotenv 17 prints an "injected env" banner to stdout, which must carry only MCP protocol messages.
+dotenv.config({ quiet: true });
 
 function parseList(raw: string | undefined): string[] | null {
   if (!raw) return null;
