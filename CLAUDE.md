@@ -43,6 +43,10 @@ Request path: MCP client -> `src/index.ts` -> `src/tools/<category>.ts` -> share
 
 For v2 aggregate/search request bodies (e.g. `aggregate-logs`, `aggregate-rum`), build SDK model instances (`new v2.LogsAggregateRequest()`, `new v2.LogsCompute()`). Plain objects cast with `as any` skip `ObjectSerializer` field mapping (`groupBy` -> `group_by`) and Datadog returns 400. The v1 synthetics code in this repo passes plain objects (with `as any`) and was not observed failing, but it hasn't been verified against a live account here.
 
+### Datadog client is pinned to `~1.59.0` (decision: stay on it)
+
+Do not bump `@datadog/datadog-api-client` past 1.59.x without doing the work below. Tried 1.64.0: the build fails with 16 type errors, all in `src/tools/fleet.ts`, because nine Fleet Automation methods (and their model classes) were renamed to `...V2` (`listFleetAgentsV2`, `listFleetAgentVersionsV2`, `listFleetDeploymentsV2`, `getFleetDeploymentV2`, `listFleetSchedulesV2`, `getFleetScheduleV2`, `createFleetDeploymentConfigureV2`, `createFleetDeploymentUpgradeV2`, `cancelFleetDeploymentV2`); 1.64 also lists a different set of "unstable operation" keys than the ones in `client.ts`. The Synthetics read tools and the dry runs worked against 1.64 (checked live); real saves were not tried on it. The tilde range matters: a published package has no lockfile, so a caret range would give consumers the newest 1.x and break the fleet tools at runtime. To move up later, either migrate `fleet.ts` to the V2 methods (the fleet write tools act on live agents, so they need a non-production agent to test) or remove the 15 fleet tools, then re-run the build, tests and a live Synthetics check.
+
 ## Synthetics: API tests vs browser tests (the fork's reason to exist)
 
 Upstream's `src/tools/synthetics.ts` (`get-synthetics-result`, `create/update-synthetics-test`) is **API-test-only** (`getAPITest*`, `type: "api"`); `list-synthetics`, `trigger-synthetics` and `delete-synthetics-test` use type-agnostic endpoints and work for browser tests too (list verified live; trigger and delete not exercised).
