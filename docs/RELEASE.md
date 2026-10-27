@@ -35,7 +35,7 @@ Status at 1.22.0 (prepared 2026-10-26): **ready to publish once the organization
 - Setting a paused test live runs it immediately (seen once, within a second).
 - Locks protect against overlapping edits inside one server process only; edits made elsewhere (for example in the Datadog UI) between a read and a save can be overwritten, because the API has no revision check.
 - Deleting a Synthetics test also deletes its monitor in Datadog, but this could not be verified because the app key used for testing cannot read monitors.
-- In the optional HTTP mode (`MCP_TRANSPORT=http`, off by default) requests are processed one at a time, so a slow tool call delays other clients. stdio is the default and the intended mode.
+- In the optional HTTP mode (`MCP_TRANSPORT=http`, off by default) requests are processed one at a time, so a slow tool call delays other clients. A request that runs longer than 10 minutes is cut off so a hung call cannot block the others. stdio is the default and the intended mode.
 - Redaction removes the configured key values and common secret words; it is not a general data-loss-prevention filter, and tool results (as opposed to errors) are returned as Datadog sends them.
 - The package's own dependencies come from public npm. The Azure feed needs npmjs as an upstream source, or consumers need access to public npm.
 

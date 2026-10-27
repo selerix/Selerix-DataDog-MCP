@@ -24,6 +24,8 @@ export interface StartMcpServerOptions {
   skipAuth?: boolean;
   /** Host header allowlist for DNS-rebinding protection. */
   allowedHosts?: string[];
+  /** Selerix addition: longest a single HTTP request may take before it is cut off (default 10 minutes). */
+  requestTimeoutMs?: number;
 }
 
 export interface HttpHandle {
@@ -106,19 +108,37 @@ export async function startMcpServer(
   // transport at a time and a stateless transport serves one request, so each request gets a fresh
   // transport, connected for the length of that request, and requests are handled one at a time.
   let queue: Promise<void> = Promise.resolve();
+  const requestTimeoutMs = opts.requestTimeoutMs ?? 10 * 60 * 1000;
   const handleMcpRequest = (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    // Watch for the client going away from the moment the request arrives, not from its turn. A request
+    // that waits behind a slow one can be abandoned before it is served, and 'close' fires only once, so a
+    // listener added later would wait forever and block every request behind it.
+    let clientGone = res.destroyed;
+    const gone = new Promise<void>((resolve) => {
+      if (clientGone) resolve();
+      else res.once("close", () => { clientGone = true; resolve(); });
+    });
+
     const run = queue.then(async () => {
+      if (clientGone) return; // nobody is left to answer
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableDnsRebindingProtection: allowedHosts !== undefined,
         allowedHosts,
       });
       await server.connect(transport);
-      const finished = new Promise<void>((resolve) => res.once("close", () => resolve()));
+      // Safety net: a request that never finishes must not hold up every request behind it.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = new Promise<void>((resolve) => {
+        timer = setTimeout(() => { res.destroy(); resolve(); }, requestTimeoutMs);
+      });
       try {
-        await transport.handleRequest(req, res);
-        await finished;
+        await Promise.race([
+          (async () => { await transport.handleRequest(req, res); await gone; })(),
+          timedOut,
+        ]);
       } finally {
+        clearTimeout(timer);
         await transport.close().catch(() => {});
       }
     });

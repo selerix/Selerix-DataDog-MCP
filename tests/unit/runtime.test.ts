@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import net from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { formatHostPort, localhostAllowedHosts, startMcpServer, type HttpHandle } from "../../src/vendor/mcp-toolkit/runtime.js";
 
@@ -103,6 +104,63 @@ describe("HTTP transport", () => {
       await handle.close();
     }
   });
+
+  const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: "Bearer tok" };
+  const toolCall = (id: number, name: string) => JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: {} } });
+  const within = <T,>(ms: number, work: Promise<T>) =>
+    Promise.race([work, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`still waiting after ${ms} ms: the request queue is stalled`)), ms))]);
+
+  it("keeps serving after a queued client disconnects before its turn", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let slowStarted = false;
+    const server = new McpServer({ name: "t", version: "0" });
+    server.tool("slow", "slow", {}, async () => { slowStarted = true; await gate; return { content: [{ type: "text" as const, text: "slow-done" }] }; });
+    server.tool("ping", "ping", {}, async () => ({ content: [{ type: "text" as const, text: "pong" }] }));
+    const handle = (await startMcpServer(server, { transport: "http", port: 0, host: "127.0.0.1", token: "tok" })) as HttpHandle;
+    try {
+      const url = `http://127.0.0.1:${handle.port}/mcp`;
+      const first = fetch(url, { method: "POST", headers, body: toolCall(1, "slow") }).then((r) => r.text());
+      while (!slowStarted) await new Promise((r) => setTimeout(r, 10));
+
+      // A complete request from a client that then vanishes while it waits behind the slow one.
+      const body = toolCall(2, "ping");
+      const socket = net.connect(handle.port, "127.0.0.1");
+      await new Promise((r) => socket.once("connect", r));
+      socket.write(`POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${handle.port}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nAuthorization: Bearer tok\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+      await new Promise((r) => setTimeout(r, 150));
+      socket.destroy();
+      await new Promise((r) => setTimeout(r, 300));
+
+      release();
+      expect(await first).toContain("slow-done");
+      const next = await within(3000, fetch(url, { method: "POST", headers, body: toolCall(3, "ping") }));
+      expect(next.status).toBe(200);
+      expect(await next.text()).toContain("pong");
+    } finally {
+      release();
+      await handle.close();
+    }
+  }, 15000);
+
+  it("cuts off a request that never finishes so later requests are still served", async () => {
+    const server = new McpServer({ name: "t", version: "0" });
+    server.tool("hang", "never returns", {}, () => new Promise(() => {}));
+    server.tool("ping", "ping", {}, async () => ({ content: [{ type: "text" as const, text: "pong" }] }));
+    const handle = (await startMcpServer(server, { transport: "http", port: 0, host: "127.0.0.1", token: "tok", requestTimeoutMs: 300 })) as HttpHandle;
+    try {
+      const url = `http://127.0.0.1:${handle.port}/mcp`;
+      // The server destroys this connection at the time limit, so both the fetch and the body read may reject.
+      const stuck = fetch(url, { method: "POST", headers, body: toolCall(1, "hang") }).then((r) => r.text()).catch(() => "cut off");
+      await new Promise((r) => setTimeout(r, 100));
+      const next = await within(4000, fetch(url, { method: "POST", headers, body: toolCall(2, "ping") }));
+      expect(next.status).toBe(200);
+      expect(await next.text()).toContain("pong");
+      await stuck;
+    } finally {
+      await handle.close();
+    }
+  }, 15000);
 
   it("accepts requests addressed to http://[::1]:port when bound to IPv6 loopback", async () => {
     const handle = await start("::1");
