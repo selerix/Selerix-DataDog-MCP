@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Write tools that are not allowed are no longer registered**, so they are not advertised to the model or listed by `search-tools`. Before, all 76 were advertised and refused at call time. With default settings the server now exposes 99 read tools instead of 175.
+- **Write tools that are not allowed are no longer registered**, so they are not advertised to the model or listed by `search-tools`. Before, all 76 were advertised and refused at call time. With default settings the server now exposes the read tools plus `search-tools` and the two `dryRun`-capable browser-test tools (`create-` and `update-synthetics-browser-test`, whose saves are still refused), 101 in all, instead of 175. An empty `DD_AUDIT_LOG` counts as unset.
 - **`DD_ALLOW_WRITE=true` no longer enables the `fleet`, `security` and `status-pages` write tools.** They act on live agents, security rules and public status pages and now need an explicit `DD_WRITE_TOOLS` entry (e.g. `DD_WRITE_TOOLS=all`). Every other write category behaves as before.
 - `assertWriteAllowed()` takes the tool name and category, so a handler invoked directly is held to the same policy as a registered one. `dryRun` previews still need no write permission.
 - Vendored toolkit: `isWriteTool()` (annotations) and an `onCall` hook on the handler wrapper. `pnpm run token-stats` now measures the full tool set with `DD_WRITE_TOOLS=all`, plus a read-only scenario.

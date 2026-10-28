@@ -145,7 +145,7 @@ Naive setup loads ~25K tokens of tool schema before any conversation. Three knob
 
 ### Read-only mode and scoped writes
 
-By default no write tool is registered or advertised, so the model cannot even see them. Enable writes with one of:
+By default no write tool is registered or advertised, so the model cannot even see them, except `create-synthetics-browser-test` and `update-synthetics-browser-test`, which stay listed so their `dryRun` previews work without write permission (a real save is refused). Enable writes with one of:
 
 - `DD_WRITE_TOOLS=synthetics` — recommended. A comma-separated list of **categories** (`synthetics`, `monitors`, ...) and/or **tool names** (`set-synthetics-test-status`), or `all`. Only listed write tools are registered. When set, `DD_ALLOW_WRITE` is ignored.
 - `DD_ALLOW_WRITE=true` — kept for existing setups. Enables every write tool **except** the `fleet`, `security` and `status-pages` categories (live agents, security rules, public status pages), which need an explicit `DD_WRITE_TOOLS` entry even then. The two settings are not additive: once `DD_WRITE_TOOLS` is set, list everything you want in it.

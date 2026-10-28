@@ -8,7 +8,7 @@ import { startMcpServer } from "./vendor/mcp-toolkit/runtime.js";
 import { inferToolAnnotations, isWriteTool } from "./vendor/mcp-toolkit/index.js";
 import { config, validateConfig } from "./config.js";
 import { toolContext } from "./audit.js";
-import { isWriteToolAllowed } from "./write-policy.js";
+import { DRY_RUN_PREVIEW_TOOLS, isWriteToolAllowed } from "./write-policy.js";
 
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
 const { version: pkgVersion } = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
@@ -175,19 +175,23 @@ const server = new McpServer({
 // --- Tool registration with category-based filtering (DD_TOOLS / DD_DISABLE) and write scoping (DD_WRITE_TOOLS) ---
 let currentCategory: Category = "metrics";
 const enabledWriteTools: string[] = [];
+const previewOnlyTools: string[] = [];
 let hiddenWriteTools = 0;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tool(name: string, description: string, schema: any, handler: any, annotations?: any): void {
   const write = isWriteTool(name);
-  // A write tool that is not allowed is neither registered nor advertised (not even through search-tools).
-  if (write && !isWriteToolAllowed(config, name, currentCategory)) {
+  // A write tool that is not allowed is neither registered nor advertised (not even through search-tools),
+  // except the dry-run preview tools, which stay available (their real saves are still refused).
+  const writeAllowed = !write || isWriteToolAllowed(config, name, currentCategory);
+  if (!writeAllowed && !DRY_RUN_PREVIEW_TOOLS.includes(name)) {
     hiddenWriteTools++;
     return;
   }
   registry.register(name, description, currentCategory);
   if (registry.isEnabled(currentCategory)) {
-    if (write) enabledWriteTools.push(name);
+    if (write && writeAllowed) enabledWriteTools.push(name);
+    else if (write) previewOnlyTools.push(name);
     const ctx = { tool: name, category: currentCategory, write };
     // The context tells the handler wrapper's audit hook which tool is running.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1588,7 +1592,7 @@ registerResources(server);
 registerPrompts(server);
 
 warnAboutUnknownWriteTokens();
-audit.started({ writeTools: enabledWriteTools, skippedWriteTools: hiddenWriteTools });
+audit.started({ writeTools: enabledWriteTools, skippedWriteTools: hiddenWriteTools, previewOnlyTools });
 
 startMcpServer(server).catch((error) => {
   console.error("Fatal error:", error);

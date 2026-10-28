@@ -139,17 +139,20 @@ beforeEach(() => { for (const k of ENV_KEYS) savedEnv[k] = process.env[k]; });
 afterEach(() => { for (const k of ENV_KEYS) process.env[k] = savedEnv[k]; });
 
 describe("tool registration (default: writes off)", () => {
-  it("registers only the read tools plus search-tools, and advertises no write tool", async () => {
+  // The only write tools still advertised when writes are off: their dryRun previews need no permission.
+  const PREVIEW_TOOLS = ["create-synthetics-browser-test", "update-synthetics-browser-test"];
+
+  it("registers the read tools, search-tools and the dry-run preview tools, and no other write tool", async () => {
     const { names } = await load({});
     expect(WRITE_TOOLS).toHaveLength(76);
-    expect(names.filter(isWriteTool)).toEqual([]);
-    expect(names).toHaveLength(READ_TOOLS.length + 1); // + search-tools
+    expect(names.filter(isWriteTool).sort()).toEqual(PREVIEW_TOOLS);
+    expect(names).toHaveLength(READ_TOOLS.length + 1 + PREVIEW_TOOLS.length); // + search-tools + previews
     for (const expected of READ_TOOLS) expect(names, `missing tool: ${expected}`).toContain(expected);
   });
 
-  it("does not list hidden write tools through search-tools either", async () => {
+  it("does not list other hidden write tools through search-tools either", async () => {
     const { registry } = await load({});
-    expect(registry.list().filter((t) => isWriteTool(t.name))).toEqual([]);
+    expect(registry.list().filter((t) => isWriteTool(t.name)).map((t) => t.name).sort()).toEqual(PREVIEW_TOOLS);
   });
 });
 
@@ -197,7 +200,8 @@ describe("tool registration (writes enabled)", () => {
     const writes = names.filter(isWriteTool);
     expect(writes).toContain("set-synthetics-test-status");
     expect(writes).toContain("create-fleet-schedule");
-    expect(writes).not.toContain("update-synthetics-browser-test");
+    expect(writes).toContain("update-synthetics-browser-test"); // advertised for dryRun previews only; its saves stay blocked
+    expect(writes).not.toContain("edit-synthetics-global-variable");
     expect(writes).not.toContain("create-monitor");
   });
 

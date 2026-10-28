@@ -46,6 +46,21 @@ describe("config", () => {
     process.env.DD_SITE = "us5.datadoghq.com";
   });
 
+  it("an empty or blank DD_AUDIT_LOG means the default, but a typo is still refused", async () => {
+    for (const blank of ["", "   "]) {
+      vi.resetModules();
+      process.env.DD_AUDIT_LOG = blank;
+      const { config, validateConfig } = await import("../../src/config.js");
+      expect(config.auditLog, JSON.stringify(blank)).toBe("writes");
+      expect(() => validateConfig()).not.toThrow();
+    }
+    vi.resetModules();
+    process.env.DD_AUDIT_LOG = "of";
+    const { validateConfig } = await import("../../src/config.js");
+    expect(() => validateConfig()).toThrow(/DD_AUDIT_LOG/);
+    process.env.DD_AUDIT_LOG = "off";
+  });
+
   it("config.site defaults to us5.datadoghq.com", async () => {
     delete process.env.DD_SITE;
     const { config } = await import("../../src/config.js");

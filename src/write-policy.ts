@@ -9,6 +9,13 @@
 
 export const WRITE_OPT_IN_CATEGORIES: readonly string[] = ["fleet", "security", "status-pages"];
 
+/**
+ * Write tools whose `dryRun: true` previews never change anything and need no write permission. They stay
+ * advertised when writes are off, so an edit can still be previewed; a real save is refused by the handler's
+ * own `assertWriteAllowed()`.
+ */
+export const DRY_RUN_PREVIEW_TOOLS: readonly string[] = ["update-synthetics-browser-test", "create-synthetics-browser-test"];
+
 /** `DD_WRITE_TOOLS` token that allows every write tool, opt-in categories included. */
 export const WRITE_ALL_TOKEN = "all";
 

@@ -16,7 +16,8 @@ export const config = {
   // Categories and/or tool names whose write tools are enabled; replaces DD_ALLOW_WRITE when set (see write-policy.ts).
   writeTools: parseList(process.env.DD_WRITE_TOOLS),
   // all | writes | off: which tool calls are logged to stderr (see audit.ts). Default: writes.
-  auditLog: (process.env.DD_AUDIT_LOG ?? "writes").trim().toLowerCase(),
+  // An empty or blank value (`DD_AUDIT_LOG=` in .env, "" in a client config) means "not set"; a typo is still refused.
+  auditLog: (process.env.DD_AUDIT_LOG?.trim() || "writes").toLowerCase(),
   enabledCategories: parseList(process.env.DD_TOOLS),
   disabledCategories: parseList(process.env.DD_DISABLE),
 };

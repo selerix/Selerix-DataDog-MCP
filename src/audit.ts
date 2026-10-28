@@ -105,7 +105,7 @@ export function createAuditLogger(opts: AuditLoggerOptions) {
     },
 
     /** One line at startup saying which write tools this process exposes (nothing is logged when mode is off). */
-    started(info: { writeTools: string[]; skippedWriteTools: number }): void {
+    started(info: { writeTools: string[]; skippedWriteTools: number; previewOnlyTools?: string[] }): void {
       if (opts.mode === "off") return;
       emit({
         ts: now().toISOString(),
@@ -113,6 +113,7 @@ export function createAuditLogger(opts: AuditLoggerOptions) {
         audit: opts.mode,
         writeToolsEnabled: info.writeTools,
         writeToolsHidden: info.skippedWriteTools,
+        dryRunOnlyTools: info.previewOnlyTools ?? [],
       });
     },
   };
