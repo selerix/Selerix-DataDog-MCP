@@ -23,7 +23,17 @@ export interface ErrorExtractor {
   extract: (error: unknown) => ErrorHandling;
 }
 
+// Selerix change: what the `onCall` hook learns about one finished call. Never includes the result.
+export interface ToolCallInfo {
+  params: unknown;
+  durationMs: number;
+  /** The thrown value when the call failed; undefined on success. */
+  error?: unknown;
+}
+
 export interface CreateWrapToolHandlerOptions {
+  /** Selerix change: called once per finished call (audit logging). A throwing hook never affects the call. */
+  onCall?: (info: ToolCallInfo) => void;
   /** Extra patterns redacted from error text, in addition to the defaults. */
   redactionPatterns?: RegExp[];
   /** Custom error classifiers, tried in order before the generic fallback. */
@@ -119,14 +129,28 @@ export function createWrapToolHandler(opts: CreateWrapToolHandlerOptions = {}) {
     fn: (params: T) => Promise<unknown>,
   ): (params: T) => Promise<ToolTextResult> {
     return async (params: T): Promise<ToolTextResult> => {
+      // Selerix change: report the finished call to `onCall` exactly once (see ToolCallInfo).
+      const started = Date.now();
+      let notified = false;
+      const notify = (error?: unknown) => {
+        if (notified || !opts.onCall) return;
+        notified = true;
+        try {
+          opts.onCall({ params, durationMs: Date.now() - started, error });
+        } catch {
+          // An audit failure must not change what the caller sees.
+        }
+      };
       try {
         const result = await fn(params);
+        notify();
         const expr = (params as Record<string, unknown> | undefined)?.[fieldParam];
         const projected = typeof expr === "string" ? applyExtractFields(result, expr) : result;
         return {
           content: [{ type: "text", text: JSON.stringify(projected, null, 2) }],
         };
       } catch (error) {
+        notify(error);
         for (const ex of extractors) {
           if (!ex.match(error)) continue;
           const handling = ex.extract(error);

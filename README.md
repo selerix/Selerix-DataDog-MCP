@@ -55,7 +55,7 @@ The package is published to the Selerix Azure Artifacts feed, not public npm. Po
 
 The package's own dependencies come from public npm, so the feed needs npmjs as an upstream source (or the machine needs access to public npm).
 
-Writes are off by default. Set `DD_ALLOW_WRITE=true` only when you want Claude to create, edit, pause/schedule, trigger or delete things. Use `DD_SITE` for your Datadog site (for example `datadoghq.com`).
+Writes are off by default, and write tools are then not even advertised to the model. Set `DD_WRITE_TOOLS=synthetics` (or a list of tool names) to allow only what you need; `DD_ALLOW_WRITE=true` still works but is broader (see [Read-only mode](#read-only-mode)). Use `DD_SITE` for your Datadog site (for example `datadoghq.com`).
 
 ### Claude Code
 
@@ -104,7 +104,9 @@ node dist/index.js
 | `DD_API_KEY` | ✅ | — | Datadog API key |
 | `DD_APP_KEY` | ✅ | — | Datadog Application key |
 | `DD_SITE` | ❌ | `us5.datadoghq.com` | Datadog site (see table below) |
-| `DD_ALLOW_WRITE` | ❌ | `false` | Set `true` to enable mutations (create/update/delete) |
+| `DD_ALLOW_WRITE` | ❌ | `false` | Set `true` to enable write tools in every category **except** `fleet`, `security` and `status-pages`. Ignored when `DD_WRITE_TOOLS` is set. |
+| `DD_WRITE_TOOLS` | ❌ | — | Comma-sep write allowlist of categories and/or tool names (e.g. `synthetics`, `set-synthetics-test-status`), or `all`. When set it replaces `DD_ALLOW_WRITE`. Write tools not listed are not registered. |
+| `DD_AUDIT_LOG` | ❌ | `writes` | Audit log on **stderr**, one JSON line per tool call: `all`, `writes` (write tools only) or `off`. |
 | `DD_TOOLS` | ❌ | — | Comma-sep allowlist of categories. Only these load — biggest token saver. |
 | `DD_DISABLE` | ❌ | — | Comma-sep denylist. Ignored when `DD_TOOLS` is set. |
 | `MCP_TRANSPORT` | ❌ | `stdio` | `http` to enable Streamable HTTP transport |
@@ -141,11 +143,22 @@ Naive setup loads ~25K tokens of tool schema before any conversation. Three knob
 2. **`extractFields` response projection** — `get-dashboard { dashboardId: "abc", extractFields: "id,title,widgets.*.definition.type" }`.
 3. **`search-tools` meta-tool** — always enabled; lets the LLM discover tools at runtime instead of preloading all schemas.
 
-### Read-only mode
+### Read-only mode and scoped writes
 
-By default, all writes are blocked to prevent accidental mutations by AI agents. The following require `DD_ALLOW_WRITE=true`:
+By default no write tool is registered or advertised, so the model cannot even see them. Enable writes with one of:
 
-`create-monitor`, `update-monitor`, `delete-monitor`, `mute-monitor`, `create-dashboard`, `update-dashboard`, `delete-dashboard`, `send-logs`, `post-event`, `trigger-synthetics`, `create-synthetics-test`, `update-synthetics-test`, `delete-synthetics-test`, `create-downtime`, `cancel-downtime`, `create-case`, `update-case-status`, `send-dora-deployment`, `send-dora-incident`, `create-slo`, `update-slo`, `delete-slo`, plus all fleet/status-page/security writes.
+- `DD_WRITE_TOOLS=synthetics` — recommended. A comma-separated list of **categories** (`synthetics`, `monitors`, ...) and/or **tool names** (`set-synthetics-test-status`), or `all`. Only listed write tools are registered. When set, `DD_ALLOW_WRITE` is ignored.
+- `DD_ALLOW_WRITE=true` — kept for existing setups. Enables every write tool **except** the `fleet`, `security` and `status-pages` categories (live agents, security rules, public status pages), which need an explicit `DD_WRITE_TOOLS` entry even then. The two settings are not additive: once `DD_WRITE_TOOLS` is set, list everything you want in it.
+
+Write tools are the ones whose names start with a write verb (`create-`, `update-`, `delete-`, `set-`, `edit-`, `trigger-`, `send-`, `post-`, `mute-`, `cancel-`, `publish-`, ...). Each write handler also re-checks the policy when it runs, and `dryRun` previews never need write permission. A `DD_WRITE_TOOLS` entry that matches nothing is reported on stderr at startup.
+
+### Audit log
+
+Each tool call writes one JSON line to **stderr** (never stdout, which carries the MCP protocol): timestamp, tool, category, `read`/`write`, `outcome` (`ok`, `error` or `blocked`), `durationMs`, the `dryRun` flag, and target identifiers such as `publicId` or `monitorId`. It never contains argument or result values (no step contents, variable values or payloads); error text is redacted. A `server_start` line lists the write tools the process exposes. `DD_AUDIT_LOG=all` also logs read tools; `off` disables it. Ship stderr to Datadog Logs from the host to keep a trail.
+
+```json
+{"ts":"2026-10-28T12:00:00.000Z","event":"tool_call","tool":"set-synthetics-test-status","category":"synthetics","kind":"write","outcome":"ok","durationMs":212,"targets":{"publicIds":["abc-def-ghi"]}}
+```
 
 ## MCP Prompts (4)
 

@@ -64,7 +64,7 @@ export const createRumRetentionFilterSchema = z.object({
 });
 
 export async function createRumRetentionFilter(params: z.infer<typeof createRumRetentionFilterSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-rum-retention-filter", "rum");
 
   const attrs = new v2.RumRetentionFilterCreateAttributes();
   attrs.name = params.name;
@@ -106,7 +106,7 @@ export const updateRumRetentionFilterSchema = z.object({
 });
 
 export async function updateRumRetentionFilter(params: z.infer<typeof updateRumRetentionFilterSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-rum-retention-filter", "rum");
 
   const attrs = new v2.RumRetentionFilterUpdateAttributes();
   if (params.name) attrs.name = params.name;
@@ -148,7 +148,7 @@ export const deleteRumRetentionFilterSchema = z.object({
 });
 
 export async function deleteRumRetentionFilter(params: z.infer<typeof deleteRumRetentionFilterSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-rum-retention-filter", "rum");
   await rumRetentionFiltersApi.deleteRetentionFilter({ appId: params.appId, rfId: params.filterId });
   return { deleted: true, appId: params.appId, filterId: params.filterId };
 }

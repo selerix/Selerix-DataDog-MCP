@@ -69,7 +69,7 @@ export const triggerSyntheticsSchema = z.object({
 });
 
 export async function triggerSynthetics(params: z.infer<typeof triggerSyntheticsSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("trigger-synthetics", "synthetics");
   const response = await syntheticsApi.triggerTests({
     body: {
       tests: params.tests.map((t) => ({
@@ -103,7 +103,7 @@ export const createSyntheticsTestSchema = z.object({
 });
 
 export async function createSyntheticsTest(params: z.infer<typeof createSyntheticsTestSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-synthetics-test", "synthetics");
   const response = await syntheticsApi.createSyntheticsAPITest({
     body: {
       name: params.name,
@@ -157,7 +157,7 @@ export function updateSyntheticsTest(params: z.infer<typeof updateSyntheticsTest
 }
 
 async function updateSyntheticsTestUnlocked(params: z.infer<typeof updateSyntheticsTestSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-synthetics-test", "synthetics");
   const current = await syntheticsApi.getAPITest({ publicId: params.publicId });
 
   const response = await syntheticsApi.updateAPITest({
@@ -195,7 +195,7 @@ export const deleteSyntheticsTestSchema = z.object({
 });
 
 export async function deleteSyntheticsTest(params: z.infer<typeof deleteSyntheticsTestSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-synthetics-test", "synthetics");
   const response = await syntheticsApi.deleteTests({
     body: {
       publicIds: params.publicIds,

@@ -209,7 +209,7 @@ async function updateSyntheticsBrowserTestUnlocked(params: z.infer<typeof update
   if (params.steps && params.steps.length === 0) {
     throw new Error("steps must contain at least one step; an empty list would wipe the recording");
   }
-  if (!params.dryRun) assertWriteAllowed();
+  if (!params.dryRun) assertWriteAllowed("update-synthetics-browser-test", "synthetics");
 
   const current = await syntheticsApi.getBrowserTest({ publicId: params.publicId });
 
@@ -321,7 +321,7 @@ export function buildBrowserTestBody(params: z.infer<typeof createSyntheticsBrow
 }
 
 export async function createSyntheticsBrowserTest(params: z.infer<typeof createSyntheticsBrowserTestSchema>) {
-  if (!params.dryRun) assertWriteAllowed();
+  if (!params.dryRun) assertWriteAllowed("create-synthetics-browser-test", "synthetics");
   const body = buildBrowserTestBody(params);
 
   if (params.dryRun) {
@@ -362,7 +362,7 @@ export const setSyntheticsTestStatusSchema = z.object({
  * through update-synthetics-browser-test would also regenerate every step ID. Works for any test type.
  */
 export async function setSyntheticsTestStatus(params: z.infer<typeof setSyntheticsTestStatusSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("set-synthetics-test-status", "synthetics");
 
   const results: { publicId: string; ok: boolean; error?: string }[] = [];
   for (const publicId of params.publicIds) {
@@ -445,7 +445,7 @@ export function editSyntheticsGlobalVariable(params: z.infer<typeof editSyntheti
 }
 
 async function editSyntheticsGlobalVariableUnlocked(params: z.infer<typeof editSyntheticsGlobalVariableSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("edit-synthetics-global-variable", "synthetics");
   const current = await syntheticsApi.getGlobalVariable({ variableId: params.variableId });
 
   if (current.value?.secure && params.value === undefined && !current.parseTestPublicId) {

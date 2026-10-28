@@ -22,6 +22,7 @@ export {
   wrapToolHandler,
   DEFAULT_REDACTION_PATTERNS,
   type CreateWrapToolHandlerOptions,
+  type ToolCallInfo,
   type ErrorExtractor,
   type ErrorHandling,
   type StructuredError,
@@ -34,4 +35,4 @@ export {
   type TransportKind,
   type HttpHandle,
 } from "./runtime.js";
-export { inferToolAnnotations, toolVerb, type ToolAnnotations } from "./annotations.js";
+export { inferToolAnnotations, isWriteTool, toolVerb, type ToolAnnotations } from "./annotations.js";
