@@ -42,6 +42,7 @@ describe("wrapToolHandler", () => {
       "Authorization: Basic dXNlcjpIdW50ZXIyIXg= rejected",
       "proxy sent basic dXNlcjpIdW50ZXIyIXg= and failed",
       "request to https://svc:Hunter2!x@host.test/path failed",
+      "cache redis://:Hunter2!x@cache.test:6379/0 unreachable",
     ];
     for (const message of cases) {
       const handler = wrapToolHandler(async () => { throw new Error(message); });
