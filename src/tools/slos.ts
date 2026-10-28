@@ -89,7 +89,7 @@ export const createSloSchema = z.object({
 });
 
 export async function createSlo(params: z.infer<typeof createSloSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-slo", "metrics");
   const response = await slosApi.createSLO({
     body: {
       name: params.name,
@@ -131,7 +131,7 @@ export const updateSloSchema = z.object({
 });
 
 export async function updateSlo(params: z.infer<typeof updateSloSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-slo", "metrics");
   // Fetch current state to merge — Datadog updateSLO requires the full object.
   const current = await slosApi.getSLO({ sloId: params.sloId });
   const s = current.data;
@@ -166,7 +166,7 @@ export const deleteSloSchema = z.object({
 });
 
 export async function deleteSlo(params: z.infer<typeof deleteSloSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-slo", "metrics");
   const response = await slosApi.deleteSLO({
     sloId: params.sloId,
     force: params.force,

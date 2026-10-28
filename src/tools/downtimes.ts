@@ -49,7 +49,7 @@ export const createDowntimeSchema = z.object({
 });
 
 export async function createDowntime(params: z.infer<typeof createDowntimeSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-downtime", "monitors");
   let monitorIdentifier: any;
   if (params.monitorId) {
     monitorIdentifier = { monitorId: params.monitorId };
@@ -94,7 +94,7 @@ export const cancelDowntimeSchema = z.object({
 });
 
 export async function cancelDowntime(params: z.infer<typeof cancelDowntimeSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("cancel-downtime", "monitors");
   await downtimesApi.cancelDowntime({
     downtimeId: params.downtimeId,
   });

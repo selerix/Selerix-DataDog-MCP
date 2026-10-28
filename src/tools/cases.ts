@@ -69,7 +69,7 @@ export const createCaseSchema = z.object({
 });
 
 export async function createCase(params: z.infer<typeof createCaseSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-case", "incidents");
 
   const response = await caseManagementApi.createCase({
     body: {
@@ -101,7 +101,7 @@ export const updateCaseStatusSchema = z.object({
 });
 
 export async function updateCaseStatus(params: z.infer<typeof updateCaseStatusSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-case-status", "incidents");
 
   const response = await caseManagementApi.updateStatus({
     caseId: params.caseId,

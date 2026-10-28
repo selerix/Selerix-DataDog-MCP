@@ -13,7 +13,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_ENTRY = path.resolve(__dirname, "..", "dist", "index.js");
 
 // Empty DD_TOOLS/DD_DISABLE stop a local .env (which the server loads) from narrowing the "default" scenario.
-const BASE_ENV = { DD_API_KEY: "x", DD_APP_KEY: "x", DD_TOOLS: "", DD_DISABLE: "" };
+// DD_WRITE_TOOLS=all measures the full surface (write tools are otherwise not registered); the read-only scenario shows the default.
+const BASE_ENV = { DD_API_KEY: "x", DD_APP_KEY: "x", DD_TOOLS: "", DD_DISABLE: "", DD_ALLOW_WRITE: "", DD_WRITE_TOOLS: "all", DD_AUDIT_LOG: "off" };
 
 // TOKEN_BUDGET: process env wins (CI sets it), then a TOKEN_BUDGET line in the repo's .env, else 0 (no guard).
 // Only that one key is read from .env so the rest of a developer's settings stay out of this script.
@@ -27,7 +28,8 @@ function resolveBudget() {
 }
 
 const SCENARIOS = [
-  { label: "default", env: {} },
+  { label: "default (all tools, writes enabled)", env: {} },
+  { label: "read-only (no writes enabled)", env: { DD_WRITE_TOOLS: "" } },
   { label: "narrow (metrics,monitors)", env: { DD_TOOLS: "metrics,monitors" } },
   { label: "typical (metrics,monitors,logs,apm,dashboards)", env: { DD_TOOLS: "metrics,monitors,logs,apm,dashboards" } },
 ];

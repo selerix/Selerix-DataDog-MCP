@@ -61,6 +61,19 @@ describe("setSyntheticsTestStatus", () => {
     }
   });
 
+  it("is blocked when DD_WRITE_TOOLS lists other tools, and allowed when it lists this one or its category", async () => {
+    const cfg = fake.config as Record<string, unknown>;
+    try {
+      cfg.writeTools = ["update-synthetics-test"];
+      await expect(setSyntheticsTestStatus({ publicIds: ["a-b-c"], status: "live" })).rejects.toThrow(/not enabled for "set-synthetics-test-status"/);
+      expect(fake.calls).toHaveLength(0);
+      cfg.writeTools = ["synthetics"];
+      await expect(setSyntheticsTestStatus({ publicIds: ["a-b-c"], status: "live" })).resolves.toMatchObject({ succeeded: 1 });
+    } finally {
+      delete cfg.writeTools;
+    }
+  });
+
   it("waits for an in-flight edit of the same test so the edit cannot undo the status", async () => {
     const events: string[] = [];
     let finishEdit!: () => void;

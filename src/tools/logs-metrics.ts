@@ -49,7 +49,7 @@ export const createLogsMetricSchema = z.object({
 });
 
 export async function createLogsMetric(params: z.infer<typeof createLogsMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-logs-metric", "logs");
 
   const compute = new v2.LogsMetricCompute();
   compute.aggregationType = params.aggregationType as v2.LogsMetricComputeAggregationType;
@@ -99,7 +99,7 @@ export const updateLogsMetricSchema = z.object({
 });
 
 export async function updateLogsMetric(params: z.infer<typeof updateLogsMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-logs-metric", "logs");
 
   const attrs = new v2.LogsMetricUpdateAttributes();
 
@@ -142,7 +142,7 @@ export const deleteLogsMetricSchema = z.object({
 });
 
 export async function deleteLogsMetric(params: z.infer<typeof deleteLogsMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-logs-metric", "logs");
   await logsMetricsApi.deleteLogsMetric({ metricId: params.metricId });
   return { deleted: true, metricId: params.metricId };
 }

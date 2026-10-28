@@ -46,6 +46,21 @@ describe("config", () => {
     process.env.DD_SITE = "us5.datadoghq.com";
   });
 
+  it("an empty or blank DD_AUDIT_LOG means the default, but a typo is still refused", async () => {
+    for (const blank of ["", "   "]) {
+      vi.resetModules();
+      process.env.DD_AUDIT_LOG = blank;
+      const { config, validateConfig } = await import("../../src/config.js");
+      expect(config.auditLog, JSON.stringify(blank)).toBe("writes");
+      expect(() => validateConfig()).not.toThrow();
+    }
+    vi.resetModules();
+    process.env.DD_AUDIT_LOG = "of";
+    const { validateConfig } = await import("../../src/config.js");
+    expect(() => validateConfig()).toThrow(/DD_AUDIT_LOG/);
+    process.env.DD_AUDIT_LOG = "off";
+  });
+
   it("config.site defaults to us5.datadoghq.com", async () => {
     delete process.env.DD_SITE;
     const { config } = await import("../../src/config.js");
@@ -63,5 +78,35 @@ describe("config", () => {
     const mod2 = await import("../../src/config.js");
     expect(mod2.config.allowWrite).toBe(true);
     delete process.env.DD_ALLOW_WRITE;
+  });
+
+  it("parses DD_WRITE_TOOLS as a lowercase list and leaves it null when unset", async () => {
+    process.env.DD_WRITE_TOOLS = " Synthetics, set-Synthetics-test-status ,";
+    vi.resetModules();
+    expect((await import("../../src/config.js")).config.writeTools).toEqual(["synthetics", "set-synthetics-test-status"]);
+    process.env.DD_WRITE_TOOLS = "";
+    vi.resetModules();
+    expect((await import("../../src/config.js")).config.writeTools).toBeNull();
+  });
+
+  it("DD_AUDIT_LOG defaults to writes, accepts all|writes|off and rejects anything else at startup", async () => {
+    const saved = process.env.DD_AUDIT_LOG;
+    try {
+      delete process.env.DD_AUDIT_LOG;
+      vi.resetModules();
+      expect((await import("../../src/config.js")).config.auditLog).toBe("writes");
+      for (const mode of ["all", "writes", "off", " OFF "]) {
+        process.env.DD_AUDIT_LOG = mode;
+        vi.resetModules();
+        const { validateConfig } = await import("../../src/config.js");
+        expect(() => validateConfig(), mode).not.toThrow();
+      }
+      process.env.DD_AUDIT_LOG = "of";
+      vi.resetModules();
+      const { validateConfig } = await import("../../src/config.js");
+      expect(() => validateConfig()).toThrow(/DD_AUDIT_LOG "of"/);
+    } finally {
+      process.env.DD_AUDIT_LOG = saved;
+    }
   });
 });

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Scoped writes (`DD_WRITE_TOOLS`)** — a write allowlist of categories and/or tool names (or `all`), e.g. `DD_WRITE_TOOLS=synthetics` or `set-synthetics-test-status`. When set it replaces `DD_ALLOW_WRITE`.
+- **Audit log (`DD_AUDIT_LOG=all|writes|off`, default `writes`)** — one JSON line per tool call on stderr: tool, category, read/write, outcome (`ok`/`error`/`blocked`), duration, `dryRun` flag and target ids (`publicId`, `monitorId`, ...). No argument or result values; error text is redacted. A `server_start` line lists the write tools exposed. An invalid value stops startup.
+
+### Changed
+
+- **Write tools that are not allowed are no longer registered**, so they are not advertised to the model or listed by `search-tools`. Before, all 76 were advertised and refused at call time. With default settings the server now exposes the read tools plus `search-tools` and the two `dryRun`-capable browser-test tools (`create-` and `update-synthetics-browser-test`, whose saves are still refused), 101 in all, instead of 175. An empty `DD_AUDIT_LOG` counts as unset.
+- **`DD_ALLOW_WRITE=true` no longer enables the `fleet`, `security` and `status-pages` write tools.** They act on live agents, security rules and public status pages and now need an explicit `DD_WRITE_TOOLS` entry (e.g. `DD_WRITE_TOOLS=all`). Every other write category behaves as before.
+- `assertWriteAllowed()` takes the tool name and category, so a handler invoked directly is held to the same policy as a registered one. `dryRun` previews still need no write permission.
+- Vendored toolkit: `isWriteTool()` (annotations) and an `onCall` hook on the handler wrapper. `pnpm run token-stats` now measures the full tool set with `DD_WRITE_TOOLS=all`, plus a read-only scenario.
+
 ## [1.22.0] - 2026-10-26
 
 First Selerix release. Based on upstream `us-all/datadog-mcp-server` 1.21.1.

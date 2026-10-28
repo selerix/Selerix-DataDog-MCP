@@ -65,6 +65,11 @@ export function toolVerb(name: string): string {
   return parts[0] ?? "";
 }
 
+// Selerix change: true when the tool's name verb marks it as a write (the same test that drives readOnlyHint).
+export function isWriteTool(name: string): boolean {
+  return WRITE_VERBS.has(toolVerb(name));
+}
+
 /**
  * Infer a tool's annotations from its name. `overrides` are merged last and win,
  * so a call site can correct any misclassification field-by-field.

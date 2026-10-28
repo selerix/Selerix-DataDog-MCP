@@ -7,3 +7,5 @@ process.env.DD_SITE = "us5.datadoghq.com";
 process.env.DD_ALLOW_WRITE = "false";
 process.env.DD_TOOLS = "";
 process.env.DD_DISABLE = "";
+process.env.DD_WRITE_TOOLS = "";
+process.env.DD_AUDIT_LOG = "off"; // keeps test output free of audit lines; audit tests inject their own sink

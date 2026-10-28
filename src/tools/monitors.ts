@@ -92,7 +92,7 @@ export const createMonitorSchema = z.object({
 });
 
 export async function createMonitor(params: z.infer<typeof createMonitorSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-monitor", "monitors");
   const response = await monitorsApi.createMonitor({
     body: {
       name: params.name,
@@ -126,7 +126,7 @@ export const updateMonitorSchema = z.object({
 });
 
 export async function updateMonitor(params: z.infer<typeof updateMonitorSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-monitor", "monitors");
   const { monitorId, ...body } = params;
   const response = await monitorsApi.updateMonitor({
     monitorId,
@@ -156,7 +156,7 @@ export const deleteMonitorSchema = z.object({
 });
 
 export async function deleteMonitor(params: z.infer<typeof deleteMonitorSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-monitor", "monitors");
   const response = await monitorsApi.deleteMonitor({
     monitorId: params.monitorId,
     force: params.force ? "true" : undefined,
@@ -206,7 +206,7 @@ export const muteMonitorSchema = z.object({
 });
 
 export async function muteMonitor(params: z.infer<typeof muteMonitorSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("mute-monitor", "monitors");
   const response = await monitorsApi.updateMonitor({
     monitorId: params.monitorId,
     body: {

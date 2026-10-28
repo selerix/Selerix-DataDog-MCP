@@ -52,7 +52,7 @@ export const createSloCorrectionSchema = z.object({
 });
 
 export async function createSloCorrection(params: z.infer<typeof createSloCorrectionSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-slo-correction", "metrics");
 
   const attributes = new v1.SLOCorrectionCreateRequestAttributes();
   attributes.sloId = params.sloId;
@@ -90,7 +90,7 @@ export const updateSloCorrectionSchema = z.object({
 });
 
 export async function updateSloCorrection(params: z.infer<typeof updateSloCorrectionSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-slo-correction", "metrics");
 
   const attributes = new v1.SLOCorrectionUpdateRequestAttributes();
   if (params.category) attributes.category = params.category as v1.SLOCorrectionCategory;
@@ -122,7 +122,7 @@ export const deleteSloCorrectionSchema = z.object({
 });
 
 export async function deleteSloCorrection(params: z.infer<typeof deleteSloCorrectionSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-slo-correction", "metrics");
   await sloCorrectionsApi.deleteSLOCorrection({
     sloCorrectionId: params.sloCorrectionId,
   });

@@ -136,7 +136,7 @@ describe("secretValuePatterns", () => {
 
 describe("assertWriteAllowed", () => {
   it("throws WriteBlockedError when allowWrite is false", () => {
-    expect(() => assertWriteAllowed()).toThrow(WriteBlockedError);
+    expect(() => assertWriteAllowed("create-monitor", "monitors")).toThrow(WriteBlockedError);
   });
 });
 

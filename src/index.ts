@@ -5,12 +5,14 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { startMcpServer } from "./vendor/mcp-toolkit/runtime.js";
-import { inferToolAnnotations } from "./vendor/mcp-toolkit/index.js";
-import { validateConfig } from "./config.js";
+import { inferToolAnnotations, isWriteTool } from "./vendor/mcp-toolkit/index.js";
+import { config, validateConfig } from "./config.js";
+import { toolContext } from "./audit.js";
+import { DRY_RUN_PREVIEW_TOOLS, isWriteToolAllowed } from "./write-policy.js";
 
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
 const { version: pkgVersion } = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
-import { wrapToolHandler } from "./tools/utils.js";
+import { audit, wrapToolHandler } from "./tools/utils.js";
 
 // Tool imports
 import {
@@ -154,7 +156,7 @@ import {
   getWorkflowInstanceSchema, getWorkflowInstance,
 } from "./tools/workflows.js";
 
-import { registry, searchToolsSchema, searchTools, type Category } from "./tool-registry.js";
+import { registry, searchToolsSchema, searchTools, CATEGORIES, type Category } from "./tool-registry.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 import {
@@ -170,14 +172,31 @@ const server = new McpServer({
   version: pkgVersion,
 });
 
-// --- Tool registration with category-based filtering (DD_TOOLS / DD_DISABLE) ---
+// --- Tool registration with category-based filtering (DD_TOOLS / DD_DISABLE) and write scoping (DD_WRITE_TOOLS) ---
 let currentCategory: Category = "metrics";
+const enabledWriteTools: string[] = [];
+const previewOnlyTools: string[] = [];
+let hiddenWriteTools = 0;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tool(name: string, description: string, schema: any, handler: any, annotations?: any): void {
+  const write = isWriteTool(name);
+  // A write tool that is not allowed is neither registered nor advertised (not even through search-tools),
+  // except the dry-run preview tools, which stay available (their real saves are still refused).
+  const writeAllowed = !write || isWriteToolAllowed(config, name, currentCategory);
+  if (!writeAllowed && !DRY_RUN_PREVIEW_TOOLS.includes(name)) {
+    hiddenWriteTools++;
+    return;
+  }
   registry.register(name, description, currentCategory);
   if (registry.isEnabled(currentCategory)) {
-    server.tool(name, description, schema, inferToolAnnotations(name, annotations), handler);
+    if (write && writeAllowed) enabledWriteTools.push(name);
+    else if (write) previewOnlyTools.push(name);
+    const ctx = { tool: name, category: currentCategory, write };
+    // The context tells the handler wrapper's audit hook which tool is running.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const audited = (...args: any[]) => toolContext.run(ctx, () => handler(...args));
+    server.tool(name, description, schema, inferToolAnnotations(name, annotations), audited);
   }
 }
 
@@ -1558,11 +1577,22 @@ tool(
   wrapToolHandler(searchTools),
 );
 
+// A DD_WRITE_TOOLS entry that is neither a category, a registered tool nor "all" is almost certainly a typo.
+function warnAboutUnknownWriteTokens(): void {
+  const known = new Set<string>(["all", ...CATEGORIES, ...registry.list().map((t) => t.name)]);
+  for (const token of config.writeTools ?? []) {
+    if (!known.has(token)) console.error(`Warning: DD_WRITE_TOOLS entry "${token}" matches no category or tool and is ignored`);
+  }
+}
+
 // --- MCP Resources (dd:// URI scheme) ---
 registerResources(server);
 
 // --- MCP Prompts (workflow templates) ---
 registerPrompts(server);
+
+warnAboutUnknownWriteTokens();
+audit.started({ writeTools: enabledWriteTools, skippedWriteTools: hiddenWriteTools, previewOnlyTools });
 
 startMcpServer(server).catch((error) => {
   console.error("Fatal error:", error);
