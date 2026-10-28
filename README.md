@@ -14,7 +14,7 @@
 - **Status Pages** — 21 tools for full status-page lifecycle (components, degradations, maintenances). Only this server.
 - **Token-efficient by design** — `extractFields` projection, `DD_TOOLS`/`DD_DISABLE` 16-category toggles, and a `search-tools` meta-tool keep LLM context low across 175 tools.
 - **Apps SDK card** — `slo-compliance-snapshot` renders as a visual card on ChatGPT clients via `_meta["openai/outputTemplate"]`. Claude clients receive the same JSON content (non-breaking).
-- **stdio + Streamable HTTP** — defaults to stdio (Claude Desktop / Code). Set `MCP_TRANSPORT=http` for ChatGPT Apps SDK or remote clients (Bearer auth via `MCP_HTTP_TOKEN`).
+- **stdio + Streamable HTTP** — defaults to stdio (Claude Desktop / Code). Set `MCP_TRANSPORT=http` for a local HTTP client such as the ChatGPT Apps SDK (Bearer auth via `MCP_HTTP_TOKEN`). HTTP mode has one shared Datadog identity and one static token, so it listens on localhost only unless you opt in with `MCP_HTTP_ALLOW_REMOTE=true` behind a gateway that authenticates each user. stdio is the supported mode.
 
 ## Try this — 5 prompts
 
@@ -113,7 +113,9 @@ node dist/index.js
 | `MCP_HTTP_TOKEN` | conditional | — | Bearer token. Required when `MCP_TRANSPORT=http` |
 | `MCP_HTTP_PORT` | ❌ | `3000` | HTTP listen port |
 | `MCP_HTTP_HOST` | ❌ | `127.0.0.1` | HTTP bind host (DNS rebinding protection auto-enabled for localhost) |
-| `MCP_HTTP_SKIP_AUTH` | ❌ | `false` | Skip Bearer auth — e.g. behind a reverse proxy that handles it |
+| `MCP_HTTP_SKIP_AUTH` | ❌ | `false` | Skip Bearer auth. Only accepted when bound to localhost |
+| `MCP_HTTP_ALLOW_REMOTE` | ❌ | `false` | Allow binding to a non-localhost host. Without it the server refuses to start on any other host |
+| `MCP_HTTP_ALLOWED_HOSTS` | ❌ | — | Comma-separated `host:port` list for the Host-header check on non-localhost binds |
 
 **Categories** (16): `metrics`, `monitors`, `dashboards`, `logs`, `apm`, `rum`, `incidents`, `security`, `synthetics`, `ci`, `infra`, `fleet`, `status-pages`, `oncall`, `teams`, `account`.
 

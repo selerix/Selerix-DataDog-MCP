@@ -60,6 +60,14 @@ describe("HTTP transport", () => {
     }
   });
 
+  it("refuses to listen beyond loopback unless remote access is asked for", async () => {
+    const mk = () => new McpServer({ name: "t", version: "0" });
+    await expect(startMcpServer(mk(), { transport: "http", port: 0, host: "0.0.0.0", token: "tok" })).rejects.toThrow(/refuses to listen on 0.0.0.0/);
+    await expect(startMcpServer(mk(), { transport: "http", port: 0, host: "192.0.2.10", token: "tok" })).rejects.toThrow(/MCP_HTTP_ALLOW_REMOTE/);
+    const handle = (await startMcpServer(mk(), { transport: "http", port: 0, host: "0.0.0.0", token: "tok", allowRemote: true })) as HttpHandle;
+    await handle.close();
+  });
+
   it("refuses to disable auth on a non-loopback bind, but allows it on loopback", async () => {
     await expect(
       startMcpServer(new McpServer({ name: "t", version: "0" }), { transport: "http", port: 0, host: "0.0.0.0", skipAuth: true }),

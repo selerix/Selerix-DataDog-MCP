@@ -25,6 +25,8 @@ export interface StartMcpServerOptions {
   skipAuth?: boolean;
   /** Host header allowlist for DNS-rebinding protection. */
   allowedHosts?: string[];
+  /** Selerix addition: allow binding to a non-loopback host (default MCP_HTTP_ALLOW_REMOTE, off). */
+  allowRemote?: boolean;
   /** Selerix addition: longest a single HTTP request may take before it is cut off (default 10 minutes). */
   requestTimeoutMs?: number;
 }
@@ -118,6 +120,15 @@ export async function startMcpServer(
   // must present the token.
   if (skipAuth && !isLocalhost) {
     throw new Error(`MCP_HTTP_SKIP_AUTH is only allowed when bound to localhost, not ${host}.`);
+  }
+  // Selerix change: every caller of the HTTP mode shares one Datadog identity and one static token, so it is a
+  // single-user, same-machine convenience. Listening beyond loopback must be asked for explicitly.
+  const allowRemote = opts.allowRemote ?? resolveBoolEnv("MCP_HTTP_ALLOW_REMOTE") ?? false;
+  if (!isLocalhost && !allowRemote) {
+    throw new Error(
+      `HTTP transport refuses to listen on ${host}: it has no per-user identity, so it is limited to localhost. ` +
+        "Set MCP_HTTP_ALLOW_REMOTE=true only behind a gateway that authenticates each user.",
+    );
   }
   let allowedHosts: string[] | undefined;
 
