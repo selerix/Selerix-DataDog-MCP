@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // A plain fake instead of vi.fn(): the Datadog call must be able to reject without the spy's call tracking
 // reporting that rejection to the runner as an unhandled error.
 const fake = vi.hoisted(() => ({
+  config: { apiKey: "test-api-key", appKey: "test-app-key", site: "datadoghq.com", allowWrite: true, enabledCategories: null, disabledCategories: null },
   calls: [] as unknown[],
   impl: (async () => true) as (arg: unknown) => Promise<unknown>,
   apiCalls: [] as string[],
@@ -10,7 +11,7 @@ const fake = vi.hoisted(() => ({
 
 // Writes must be allowed for the handler to reach the API; the real config is pinned read-only by tests/setup.ts.
 vi.mock("../../src/config.js", () => ({
-  config: { apiKey: "test-api-key", appKey: "test-app-key", site: "datadoghq.com", allowWrite: true, enabledCategories: null, disabledCategories: null },
+  config: fake.config,
   validateConfig: () => {},
 }));
 vi.mock("../../src/client.js", () => ({
@@ -48,6 +49,16 @@ describe("setSyntheticsTestStatus", () => {
       { publicId: "d-e-f", body: { newStatus: "live" } },
     ]);
     expect(result).toMatchObject({ requestedStatus: "live", succeeded: 2, failed: 0 });
+  });
+
+  it("is blocked without write permission, before any API call", async () => {
+    fake.config.allowWrite = false;
+    try {
+      await expect(setSyntheticsTestStatus({ publicIds: ["a-b-c"], status: "live" })).rejects.toThrow(/Write operations are disabled/);
+      expect(fake.calls).toHaveLength(0);
+    } finally {
+      fake.config.allowWrite = true;
+    }
   });
 
   it("waits for an in-flight edit of the same test so the edit cannot undo the status", async () => {
