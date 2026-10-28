@@ -87,6 +87,24 @@ describe("audit logger", () => {
   });
 });
 
+describe("default stderr sink", () => {
+  it("survives an asynchronous stderr error (EPIPE) instead of letting it kill the process, with one listener", () => {
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((() => true) as never);
+    try {
+      const before = process.stderr.listenerCount("error");
+      const a = createAuditLogger({ mode: "all", redact: (s) => s });
+      const b = createAuditLogger({ mode: "all", redact: (s) => s });
+      a.record({ ctx: WRITE, params: {}, blocked: false, durationMs: 1 });
+      b.record({ ctx: WRITE, params: {}, blocked: false, durationMs: 1 });
+      expect(process.stderr.listenerCount("error")).toBeLessThanOrEqual(before + 1); // not one per logger
+      // With no listener, emit("error") throws, which is what becomes an uncaught exception in a real stream.
+      expect(() => process.stderr.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }))).not.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe("extractTargets", () => {
   it("returns undefined when there is nothing identifier-like", () => {
     expect(extractTargets({ query: "x" }, (s) => s)).toBeUndefined();

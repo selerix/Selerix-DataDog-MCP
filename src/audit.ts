@@ -74,8 +74,22 @@ export interface AuditLoggerOptions {
   now?: () => Date;
 }
 
+let stderrErrorGuarded = false;
+
+/**
+ * Writing to a closed stderr pipe (a log collector that went away) makes the stream emit an asynchronous
+ * `error` event, which no try/catch around write() can see; with no listener Node treats it as an uncaught
+ * exception and the whole MCP server dies. Lose the audit line instead. One listener per process, however
+ * many loggers are created.
+ */
+function guardStderr(): void {
+  if (stderrErrorGuarded) return;
+  stderrErrorGuarded = true;
+  process.stderr.on("error", () => {});
+}
+
 export function createAuditLogger(opts: AuditLoggerOptions) {
-  const write = opts.write ?? ((line: string) => { process.stderr.write(line + "\n"); });
+  const write = opts.write ?? ((line: string) => { guardStderr(); process.stderr.write(line + "\n"); });
   const now = opts.now ?? (() => new Date());
 
   function emit(record: Record<string, unknown>): void {
