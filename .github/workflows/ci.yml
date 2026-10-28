@@ -16,23 +16,16 @@ jobs:
       matrix:
         node-version: [22]
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      - name: Run tests (Node 20+)
-        if: matrix.node-version >= 20
+      - name: Run tests
         run: pnpm run test
-        env:
-          DD_CIVISIBILITY_AGENTLESS_ENABLED: "true"
-          DD_API_KEY: ${{ secrets.DD_API_KEY }}
-          DD_SITE: us5.datadoghq.com
-          JOB_ID: ${{ job.check_run_id }}
-          NODE_OPTIONS: "--import dd-trace/register.js -r dd-trace/ci/init"
       - name: Token stats (regression guard, Node 22 only)
         if: matrix.node-version == 22
         run: pnpm run token-stats
@@ -43,7 +36,7 @@ jobs:
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - name: Install gitleaks
