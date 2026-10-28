@@ -18,6 +18,10 @@ export const config = {
   // all | writes | off: which tool calls are logged to stderr (see audit.ts). Default: writes.
   // An empty or blank value (`DD_AUDIT_LOG=` in .env, "" in a client config) means "not set"; a typo is still refused.
   auditLog: (process.env.DD_AUDIT_LOG?.trim() || "writes").toLowerCase(),
+  // Limits on what browser-test writes may contain (see tools/browser-limits.ts). Unset = the defaults described there.
+  browserStepTypes: parseList(process.env.DD_BROWSER_STEP_TYPES),
+  browserUrlHosts: parseList(process.env.DD_BROWSER_URL_HOSTS),
+  allowPrivateLocations: process.env.DD_ALLOW_PRIVATE_LOCATIONS === "true",
   enabledCategories: parseList(process.env.DD_TOOLS),
   disabledCategories: parseList(process.env.DD_DISABLE),
 };

@@ -106,6 +106,9 @@ node dist/index.js
 | `DD_SITE` | ❌ | `us5.datadoghq.com` | Datadog site (see table below) |
 | `DD_ALLOW_WRITE` | ❌ | `false` | Set `true` to enable write tools in every category **except** `fleet`, `security` and `status-pages`. Ignored when `DD_WRITE_TOOLS` is set. |
 | `DD_WRITE_TOOLS` | ❌ | — | Comma-sep write allowlist of categories and/or tool names (e.g. `synthetics`, `set-synthetics-test-status`), or `all`. When set it replaces `DD_ALLOW_WRITE`. Write tools not listed are not registered. |
+| `DD_BROWSER_STEP_TYPES` | ❌ | — | Step types the browser-test write tools may add or edit (comma-separated, or `all`). Unset: everything except `assertFromJavascript`, `extractFromJavascript` and `runApiTest`, which are refused |
+| `DD_BROWSER_URL_HOSTS` | ❌ | — | Hosts (and their subdomains) that start URLs and `goToUrl` steps written by the tools must stay on, e.g. `selerix.com`. Unset: any http(s) host (other schemes are always refused) |
+| `DD_ALLOW_PRIVATE_LOCATIONS` | ❌ | `false` | Allow the write tools to put a test on a private location (`pl:` id), which runs inside a private network |
 | `DD_AUDIT_LOG` | ❌ | `writes` | Audit log on **stderr**, one JSON line per tool call: `all`, `writes` (write tools only) or `off`. |
 | `DD_TOOLS` | ❌ | — | Comma-sep allowlist of categories. Only these load — biggest token saver. |
 | `DD_DISABLE` | ❌ | — | Comma-sep denylist. Ignored when `DD_TOOLS` is set. |

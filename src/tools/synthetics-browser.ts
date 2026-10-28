@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { syntheticsApi } from "../client.js";
 import { assertWriteAllowed, redactText, testLockKey, withLock } from "./utils.js";
+import { checkBrowserWrite } from "./browser-limits.js";
 
 // The lock helpers live in utils.ts so every tool that rewrites a test uses the same ones; re-exported here.
 export { withLock, testLockKey };
@@ -159,9 +160,10 @@ export const updateSyntheticsBrowserTestSchema = z.object({
 export function applyStepUpdates(
   steps: Record<string, any>[],
   updates: z.infer<typeof stepUpdateSchema>[],
-): { steps: Record<string, any>[]; changed: number[] } {
+): { steps: Record<string, any>[]; changed: number[]; paramsChanged: number[] } {
   const next = steps.map((s) => ({ ...s }));
   const changed = new Set<number>();
+  const paramsChanged = new Set<number>(); // steps whose params (code, URL, ...) were edited
 
   for (const u of updates) {
     if (u.index === undefined && !u.publicId) {
@@ -175,7 +177,10 @@ export function applyStepUpdates(
 
     const step = next[i];
     if (u.name !== undefined) step.name = u.name;
-    if (u.params !== undefined) step.params = { ...(step.params ?? {}), ...u.params };
+    if (u.params !== undefined) {
+      step.params = { ...(step.params ?? {}), ...u.params };
+      paramsChanged.add(i);
+    }
     if (u.allowFailure !== undefined) step.allowFailure = u.allowFailure;
     if (u.isCritical !== undefined) step.isCritical = u.isCritical;
     if (u.alwaysExecute !== undefined) step.alwaysExecute = u.alwaysExecute;
@@ -185,7 +190,7 @@ export function applyStepUpdates(
     changed.add(i);
   }
 
-  return { steps: next, changed: [...changed].sort((a, b) => a - b) };
+  return { steps: next, changed: [...changed].sort((a, b) => a - b), paramsChanged: [...paramsChanged].sort((a, b) => a - b) };
 }
 
 /**
@@ -216,11 +221,23 @@ async function updateSyntheticsBrowserTestUnlocked(params: z.infer<typeof update
   const currentSteps = (current.steps ?? []) as Record<string, any>[];
   let steps = currentSteps;
   let changedSteps: number[] = [];
+  let paramsChangedSteps: number[] = [];
   if (params.stepUpdates) {
-    ({ steps, changed: changedSteps } = applyStepUpdates(currentSteps, params.stepUpdates));
+    ({ steps, changed: changedSteps, paramsChanged: paramsChangedSteps } = applyStepUpdates(currentSteps, params.stepUpdates));
   } else if (params.steps) {
     steps = params.steps;
   }
+
+  // What this call writes must stay within the configured limits (also checked on a dry run, so a preview
+  // shows the refusal). Steps that already exist are re-checked only when a stepUpdate edits their params,
+  // where the code and URLs live; renaming a step or toggling a flag is not a content change.
+  checkBrowserWrite({
+    startUrl: params.startUrl,
+    steps: params.steps
+      ? steps.map((step, index) => ({ step, index }))
+      : paramsChangedSteps.map((index) => ({ step: steps[index], index })),
+    locations: params.locations,
+  });
 
   // PUT replaces the recording. If Datadog returned no steps for this test (seen for a few tests whose
   // results still report steps), saving would send an empty list back and could wipe the recording.
@@ -323,6 +340,11 @@ export function buildBrowserTestBody(params: z.infer<typeof createSyntheticsBrow
 export async function createSyntheticsBrowserTest(params: z.infer<typeof createSyntheticsBrowserTestSchema>) {
   if (!params.dryRun) assertWriteAllowed("create-synthetics-browser-test", "synthetics");
   const body = buildBrowserTestBody(params);
+  checkBrowserWrite({
+    startUrl: params.startUrl,
+    steps: params.steps.map((step, index) => ({ step, index })),
+    locations: params.locations,
+  });
 
   if (params.dryRun) {
     return {

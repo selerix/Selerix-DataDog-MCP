@@ -9,3 +9,6 @@ process.env.DD_TOOLS = "";
 process.env.DD_DISABLE = "";
 process.env.DD_WRITE_TOOLS = "";
 process.env.DD_AUDIT_LOG = "off"; // keeps test output free of audit lines; audit tests inject their own sink
+process.env.DD_BROWSER_STEP_TYPES = "";
+process.env.DD_BROWSER_URL_HOSTS = "";
+process.env.DD_ALLOW_PRIVATE_LOCATIONS = "";

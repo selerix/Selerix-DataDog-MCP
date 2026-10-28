@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Handler-level tests with a fake Datadog client. Plain functions, not vi.fn(): see tests/unit/set-status.test.ts.
 const fake = vi.hoisted(() => ({
-  config: { apiKey: "test-api-key", appKey: "test-app-key", site: "datadoghq.com", allowWrite: true, enabledCategories: null, disabledCategories: null },
+  config: { apiKey: "test-api-key", appKey: "test-app-key", site: "datadoghq.com", allowWrite: true, enabledCategories: null, disabledCategories: null, browserStepTypes: null as string[] | null, browserUrlHosts: null as string[] | null, allowPrivateLocations: false },
   calls: [] as { method: string; arg: any }[],
   test: undefined as any, // what getBrowserTest returns
   variable: undefined as any, // what getGlobalVariable returns
@@ -61,6 +61,9 @@ const methods = () => fake.calls.map((c) => c.method);
 beforeEach(() => {
   fake.calls.length = 0;
   fake.config.allowWrite = true;
+  fake.config.browserStepTypes = null;
+  fake.config.browserUrlHosts = null;
+  fake.config.allowPrivateLocations = false;
   fake.test = currentTest();
   fake.variable = undefined;
 });
@@ -153,6 +156,48 @@ describe("updateSyntheticsBrowserTest", () => {
 
   it("rejects stepUpdates combined with steps before touching Datadog", async () => {
     await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", steps: [{ type: "wait" }], stepUpdates: [{ index: 0, name: "x" }], dryRun: false })).rejects.toThrow(/not both/);
+    expect(fake.calls).toHaveLength(0);
+  });
+});
+
+describe("browser-test write limits (SEC-8)", () => {
+  it("update refuses a JavaScript step before any save, also on a dry run", async () => {
+    const bad = [{ type: "assertFromJavascript", name: "Run js", params: { code: "1" } }];
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", steps: bad, dryRun: false })).rejects.toThrow(/refused by default/);
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", steps: bad, dryRun: true })).rejects.toThrow(/refused by default/);
+    expect(puts()).toHaveLength(0);
+  });
+
+  it("stepUpdates may edit the params of an ordinary step but not the code of a blocked-type step; flag changes are fine", async () => {
+    fake.test = { ...currentTest(), steps: [...currentTest().steps, { publicId: "step-3", name: "Existing js", type: "assertFromJavascript", params: { code: "1" } }] };
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", stepUpdates: [{ index: 2, params: { code: "2" } }], dryRun: false })).rejects.toThrow(/step 3 \("Existing js"\)/);
+    expect(puts()).toHaveLength(0);
+    // Toggling a flag on that same step, or editing another step, is not a content change.
+    await updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", stepUpdates: [{ index: 2, allowFailure: true }, { index: 1, params: { extra: 1 } }], dryRun: false });
+    expect(puts()).toHaveLength(1);
+  });
+
+  it("stepUpdates that point a goToUrl step outside DD_BROWSER_URL_HOSTS are refused", async () => {
+    fake.config.browserUrlHosts = ["selerix.com"];
+    fake.test = { ...currentTest(), steps: [{ publicId: "step-1", name: "Open", type: "goToUrl", params: { value: "https://stage.selerix.com/login" } }] };
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", stepUpdates: [{ index: 0, params: { value: "https://evil.test/" } }], dryRun: false })).rejects.toThrow(/DD_BROWSER_URL_HOSTS/);
+    expect(puts()).toHaveLength(0);
+  });
+
+  it("update refuses a start URL, a goToUrl step or a location outside the limits", async () => {
+    fake.config.browserUrlHosts = ["selerix.com"];
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", startUrl: "https://evil.test/", dryRun: false })).rejects.toThrow(/DD_BROWSER_URL_HOSTS/);
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", steps: [{ type: "goToUrl", params: { value: "https://evil.test/" } }], dryRun: false })).rejects.toThrow(/DD_BROWSER_URL_HOSTS/);
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", locations: ["pl:internal"], dryRun: false })).rejects.toThrow(/private location/);
+    expect(puts()).toHaveLength(0);
+  });
+
+  it("create refuses a blocked step, an off-list URL and a private location, also on a dry run", async () => {
+    const base = { name: "T", startUrl: "https://www.example.com", steps: [{ type: "goToUrl", name: "Open", params: { value: "https://www.example.com" } }] };
+    await expect(createSyntheticsBrowserTest({ ...createSyntheticsBrowserTestSchema.parse({ ...base, steps: [{ type: "extractFromJavascript", params: {} }] }), dryRun: true })).rejects.toThrow(/refused by default/);
+    await expect(createSyntheticsBrowserTest(createSyntheticsBrowserTestSchema.parse({ ...base, locations: ["pl:internal"] }))).rejects.toThrow(/private location/);
+    fake.config.browserUrlHosts = ["selerix.com"];
+    await expect(createSyntheticsBrowserTest(createSyntheticsBrowserTestSchema.parse(base))).rejects.toThrow(/DD_BROWSER_URL_HOSTS/);
     expect(fake.calls).toHaveLength(0);
   });
 });
