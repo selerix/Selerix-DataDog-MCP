@@ -29,6 +29,28 @@ describe("wrapToolHandler", () => {
     expect(text).not.toMatch(/abcdef123|ghijkl456|token/);
   });
 
+  it("removes the secret value that follows a secret word, in several shapes", async () => {
+    const cases = [
+      "password=Hunter2!x token=abc123 token=def456",
+      'body {"password":"Hunter2!x","token": "abc123"} failed',
+      "Authorization: Bearer abc123def456 rejected",
+      "client_secret=abc123 and access_token: def456",
+      "jwt eyJhbGciOi.eyJzdWIiOiIx.SflKxwRJSMeKKF2QT4fw here",
+      "key AKIAABCDEFGHIJKLMNOP leaked",
+    ];
+    for (const message of cases) {
+      const handler = wrapToolHandler(async () => { throw new Error(message); });
+      const text = (await handler({} as any)).content[0].text;
+      expect(text, message).not.toMatch(/Hunter2|abc123|def456|eyJ|AKIA/);
+    }
+  });
+
+  it("keeps ordinary error text readable", async () => {
+    const handler = wrapToolHandler(async () => { throw new Error("Monitor 123 not found in us5"); });
+    const parsed = JSON.parse((await handler({} as any)).content[0].text);
+    expect(parsed.message).toBe("Monitor 123 not found in us5");
+  });
+
   it("catches generic Error and returns sanitized structure", async () => {
     const handler = wrapToolHandler(async () => {
       throw new Error("something failed");

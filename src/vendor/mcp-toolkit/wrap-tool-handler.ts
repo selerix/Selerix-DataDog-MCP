@@ -43,6 +43,16 @@ export const DEFAULT_REDACTION_PATTERNS: readonly RegExp[] = Object.freeze([
   /token/i,
 ]);
 
+// Selerix change: patterns that remove the secret VALUE, not just the word next to it. Upstream's word
+// patterns turned `password=Hunter2!x` into `[REDACTED]=Hunter2!x`. These run before everything else, so
+// the word is still there to match; the whole `name=value` / `name: value` pair is replaced.
+export const VALUE_REDACTION_PATTERNS: readonly RegExp[] = Object.freeze([
+  /bearer\s+\S+/i,
+  /\beyJ[\w-]+\.[\w-]+\.[\w-]+/, // JWT
+  /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, // AWS access key id
+  /(?:api[_-]?key|app[_-]?key|authorization|passw(?:or)?d|secret|token)[\w-]*["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;&}]+)/i,
+]);
+
 function sanitizeText(text: string, patterns: readonly RegExp[]): string {
   let result = text;
   for (const pattern of patterns) {
@@ -73,12 +83,12 @@ function sanitizeStructured(data: StructuredError, patterns: readonly RegExp[]):
   return out;
 }
 
-// Selerix change: caller patterns run first, so an exact secret value is removed whole before the
-// generic word patterns (api key, token, ...) can partially match inside it.
+// Selerix change: value-aware patterns run first, then caller patterns, so an exact secret value is removed
+// whole before the generic word patterns (api key, token, ...) can partially match inside it.
 function buildPatterns(opts: CreateWrapToolHandlerOptions): RegExp[] {
   // Also global: without the g flag only the first match in a text was replaced, so a second
   // "Bearer <value>" or a repeated word stayed visible.
-  return [...(opts.redactionPatterns ?? []), ...DEFAULT_REDACTION_PATTERNS].map((p) =>
+  return [...VALUE_REDACTION_PATTERNS, ...(opts.redactionPatterns ?? []), ...DEFAULT_REDACTION_PATTERNS].map((p) =>
     p.flags.includes("g") ? p : new RegExp(p.source, p.flags + "g"),
   );
 }

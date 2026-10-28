@@ -4,7 +4,8 @@
  * Transport is selected by `MCP_TRANSPORT` env (`stdio` | `http`), defaulting to `stdio`.
  * In `http` mode, requires `MCP_HTTP_TOKEN` for Bearer auth (or `MCP_HTTP_SKIP_AUTH=true`).
  */
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { createServer,type IncomingMessage, type ServerResponse } from "node:http";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -61,6 +62,18 @@ function resolveBoolEnv(name: string): boolean | undefined {
   return undefined;
 }
 
+// Selerix change: constant-time bearer check (hashing first gives equal-length buffers).
+export function tokenMatches(header: string | undefined, token: string): boolean {
+  const sha = (s: string) => createHash("sha256").update(s).digest();
+  return timingSafeEqual(sha(header ?? ""), sha(`Bearer ${token}`));
+}
+
+// Selerix change: MCP_HTTP_ALLOWED_HOSTS="host:port,..." supplies the Host allowlist for non-loopback binds.
+function envList(raw: string | undefined): string[] | undefined {
+  const list = raw?.split(",").map((s) => s.trim()).filter(Boolean);
+  return list && list.length > 0 ? list : undefined;
+}
+
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -101,6 +114,11 @@ export async function startMcpServer(
   }
 
   const isLocalhost = LOCALHOST_HOSTS.has(host);
+  // Selerix change: auth can only be turned off for a loopback bind. Anything reachable from the network
+  // must present the token.
+  if (skipAuth && !isLocalhost) {
+    throw new Error(`MCP_HTTP_SKIP_AUTH is only allowed when bound to localhost, not ${host}.`);
+  }
   let allowedHosts: string[] | undefined;
 
   // Selerix change: upstream connected one stateless transport at startup and reused it for every request.
@@ -159,7 +177,7 @@ export async function startMcpServer(
       }
       if (!skipAuth) {
         const header = req.headers.authorization;
-        if (header !== `Bearer ${token}`) {
+        if (!tokenMatches(header, token!)) {
           writeJson(res, 401, { error: "unauthorized" });
           return;
         }
@@ -174,10 +192,10 @@ export async function startMcpServer(
       }
       await handleMcpRequest(req, res);
     } catch (err) {
+      // Selerix change: the raw message is not sent to the client (it could carry secrets); it goes to stderr.
+      console.error("MCP HTTP request failed:", err instanceof Error ? err.message : String(err));
       if (!res.headersSent) {
-        writeJson(res, 500, {
-          error: err instanceof Error ? err.message : String(err),
-        });
+        writeJson(res, 500, { error: "internal server error" });
       } else {
         res.end();
       }
@@ -192,6 +210,7 @@ export async function startMcpServer(
         const boundPort = typeof address === "object" && address ? address.port : port;
         allowedHosts =
           opts.allowedHosts ??
+          envList(process.env.MCP_HTTP_ALLOWED_HOSTS) ??
           (isLocalhost ? localhostAllowedHosts(host, boundPort) : undefined);
 
         const authState = skipAuth ? " (auth disabled)" : "";

@@ -27,6 +27,7 @@ First Selerix release. Based on upstream `us-all/datadog-mcp-server` 1.21.1.
 - HTTP transport (`MCP_TRANSPORT=http`): fixed the localhost `Host` allowlist for IPv6 (`MCP_HTTP_HOST=::1`); requests addressed to `[::1]:port` were rejected with 403 even with a valid token. `dotenv` no longer prints its banner to stdout.
 - CI token budget raised from 30000 to 35000 and made adjustable through the `TOKEN_BUDGET` repository variable; the token-stats script ignores a local `.env` `DD_TOOLS` / `DD_DISABLE`.
 - Upstream's public npm and container publish workflows are disabled (`*.yml.disabled`).
+- Security hardening after the architecture review: `DD_SITE` must be an official Datadog site (`datadoghq.com`, `us3`/`us5`/`ap1`/`ap2.datadoghq.com`, `datadoghq.eu`, `ddog-gov.com`) or the server refuses to start; redaction removes the value after `password=`, `token:` and similar, bearer values, JWTs and AWS key ids, and applies to every occurrence; HTTP mode only serves POST (405 otherwise, so an open GET stream cannot block the queue), compares the token in constant time, refuses `MCP_HTTP_SKIP_AUTH` unless bound to localhost, accepts `MCP_HTTP_ALLOWED_HOSTS` and no longer returns raw error text in a 500; `update-synthetics-browser-test` rejects `steps: []`.
 
 ### Notes
 

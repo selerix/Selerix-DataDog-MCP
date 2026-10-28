@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import net from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { formatHostPort, localhostAllowedHosts, startMcpServer, type HttpHandle } from "../../src/vendor/mcp-toolkit/runtime.js";
+import { formatHostPort, localhostAllowedHosts, startMcpServer, tokenMatches, type HttpHandle } from "../../src/vendor/mcp-toolkit/runtime.js";
 
 describe("host allowlist", () => {
   it("brackets IPv6 literals the way clients send them in the Host header", () => {
@@ -50,6 +50,36 @@ describe("HTTP transport", () => {
       expect((await initialize(`${base}/mcp`, { authorization: "Bearer tok" })).status).toBe(200);
     } finally {
       await handle?.close();
+    }
+  });
+
+  it("compares the bearer token exactly", () => {
+    expect(tokenMatches("Bearer tok", "tok")).toBe(true);
+    for (const bad of [undefined, "", "Bearer to", "Bearer tok2", "bearer tok", "tok"]) {
+      expect(tokenMatches(bad, "tok"), String(bad)).toBe(false);
+    }
+  });
+
+  it("refuses to disable auth on a non-loopback bind, but allows it on loopback", async () => {
+    await expect(
+      startMcpServer(new McpServer({ name: "t", version: "0" }), { transport: "http", port: 0, host: "0.0.0.0", skipAuth: true }),
+    ).rejects.toThrow(/only allowed when bound to localhost/);
+    const handle = (await startMcpServer(new McpServer({ name: "t", version: "0" }), { transport: "http", port: 0, host: "127.0.0.1", skipAuth: true })) as HttpHandle;
+    await handle.close();
+  });
+
+  it("never sends a raw internal error message to the client", async () => {
+    // A server whose connect() throws forces the 500 path.
+    const broken = { connect: async () => { throw new Error("internal detail with token=abc12345"); } } as unknown as McpServer;
+    const handle = (await startMcpServer(broken, { transport: "http", port: 0, host: "127.0.0.1", token: "tok" })) as HttpHandle;
+    try {
+      const res = await initialize(`http://127.0.0.1:${handle.port}/mcp`, { authorization: "Bearer tok" });
+      expect(res.status).toBe(500);
+      const text = await res.text();
+      expect(text).toContain("internal server error");
+      expect(text).not.toMatch(/internal detail|abc12345/);
+    } finally {
+      await handle.close();
     }
   });
 
