@@ -47,6 +47,21 @@ describe("wrapToolHandler", () => {
     }
   });
 
+  it("redacts values held under secret-looking keys in a structured Datadog error", async () => {
+    const handler = wrapToolHandler(async () => {
+      const err = new Error("Bad Request") as Error & { code: number; body: unknown };
+      err.code = 400;
+      err.body = { errors: [{ detail: "rejected", password: "Hunter2!x", nested: { access_token: "abc123", note: "keep me" } }, "plain"] };
+      throw err;
+    });
+    const result = await handler({} as any);
+    const text = result.content[0].text;
+    expect(text).not.toMatch(/Hunter2|abc123/);
+    expect(text).toContain("keep me");
+    expect(text).toContain("rejected");
+    expect(JSON.parse(text).status).toBe(400);
+  });
+
   it("keeps ordinary error text readable", async () => {
     const handler = wrapToolHandler(async () => { throw new Error("Monitor 123 not found in us5"); });
     const parsed = JSON.parse((await handler({} as any)).content[0].text);

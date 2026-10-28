@@ -63,12 +63,19 @@ function sanitizeText(text: string, patterns: readonly RegExp[]): string {
 
 // Selerix change: walk nested arrays/objects too. Upstream only cleaned top-level strings, so a value
 // inside e.g. `datadogError: [...]` was returned unredacted.
-function sanitizeValue(value: unknown, patterns: readonly RegExp[]): unknown {
+// Selerix change: a structured error can hold `{ "password": "Hunter2" }`, where the secret word is the KEY
+// and the value alone ("Hunter2") has nothing to match. A value under a secret-looking key is replaced whole.
+const SENSITIVE_KEY = /api[_-]?key|app[_-]?key|authorization|passw(?:or)?d|secret|token/i;
+
+function sanitizeValue(value: unknown, patterns: readonly RegExp[], key?: string): unknown {
+  if (key !== undefined && SENSITIVE_KEY.test(key) && value !== null && value !== undefined && typeof value !== "boolean") {
+    return "[REDACTED]";
+  }
   if (typeof value === "string") return sanitizeText(value, patterns);
   if (Array.isArray(value)) return value.map((v) => sanitizeValue(v, patterns));
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, sanitizeValue(v, patterns)]),
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, sanitizeValue(v, patterns, k)]),
     );
   }
   return value;
@@ -78,7 +85,7 @@ function sanitizeStructured(data: StructuredError, patterns: readonly RegExp[]):
   const out: StructuredError = { message: sanitizeText(data.message, patterns) };
   for (const [key, value] of Object.entries(data)) {
     if (key === "message") continue;
-    out[key] = sanitizeValue(value, patterns);
+    out[key] = sanitizeValue(value, patterns, key);
   }
   return out;
 }
