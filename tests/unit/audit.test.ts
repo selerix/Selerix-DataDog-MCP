@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createAuditLogger, extractTargets, toolContext, type ToolContext } from "../../src/audit.js";
+import { createWrapToolHandler } from "../../src/vendor/mcp-toolkit/index.js";
 
 const WRITE: ToolContext = { tool: "update-synthetics-browser-test", category: "synthetics", write: true };
 const READ: ToolContext = { tool: "get-monitor", category: "monitors", write: false };
@@ -160,16 +161,27 @@ describe("audit through the handler wrapper", () => {
   });
 
   it("records 'error', not 'ok', when building the response fails after the handler succeeded", async () => {
-    const { utils, run, lines } = await load({ allowWrite: true });
-    const ctx = { tool: "update-monitor", category: "monitors", write: true };
+    // Built directly (no module reset) with an injected sink, so only the wrapper's ordering is under test.
+    const sink: string[] = [];
+    const audit = createAuditLogger({ mode: "all", redact: (s) => s, write: (l) => sink.push(l) });
+    const wrap = createWrapToolHandler({
+      onCall: ({ error, durationMs }) => {
+        const ctx = toolContext.getStore();
+        if (ctx) audit.record({ ctx, params: {}, error, blocked: false, durationMs });
+      },
+    });
     const circular: Record<string, unknown> = {};
-    circular.self = circular; // JSON.stringify throws
-    const handler = utils.wrapToolHandler(async (_p: unknown) => circular);
-    const result = await run(ctx, () => handler({}));
+    circular.self = circular; // JSON.stringify throws after the handler has already returned
+    const result = await toolContext.run(WRITE, () => wrap(async (_p: unknown) => circular)({}));
     expect(result.isError).toBe(true);
-    const out = lines();
-    expect(out).toHaveLength(1); // reported once
-    expect(out[0].outcome).toBe("error");
+    const lines = sink.map((l) => JSON.parse(l));
+    expect(lines).toHaveLength(1); // reported exactly once
+    expect(lines[0].outcome).toBe("error");
+
+    sink.length = 0;
+    const ok = await toolContext.run(WRITE, () => wrap(async (_p: unknown) => ({ fine: true }))({}));
+    expect(ok.isError).toBeUndefined();
+    expect(sink.map((l) => JSON.parse(l).outcome)).toEqual(["ok"]);
   });
 
   it("does not log read tools in the default 'writes' mode, but does in 'all'", async () => {

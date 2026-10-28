@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { isWriteTool } from "../../src/vendor/mcp-toolkit/annotations.js";
 
+// Each scenario re-imports the whole server (all tool modules), which takes several seconds on a busy machine;
+// the 5s default made these tests time out when the full suite runs in parallel.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 const toolCalls: { name: string; description: string; annotations?: any }[] = [];
 
 // Mock McpServer to capture tool registrations
