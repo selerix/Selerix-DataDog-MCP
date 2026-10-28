@@ -6,6 +6,7 @@ import { isWriteTool } from "../../src/vendor/mcp-toolkit/annotations.js";
 // the 5s default made these tests time out when the full suite runs in parallel.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
+const resourceNames: string[] = [];
 const toolCalls: { name: string; description: string; annotations?: any }[] = [];
 
 // Mock McpServer to capture tool registrations
@@ -15,8 +16,8 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
       // signature: tool(name, description, schema, annotations, handler)
       toolCalls.push({ name, description, annotations: _args[1] as any });
     }
-    registerResource(..._args: unknown[]) {
-      // resources are not counted as tools — no-op for this test
+    registerResource(name: string, ..._args: unknown[]) {
+      resourceNames.push(name); // resources are not counted as tools
     }
     registerPrompt(..._args: unknown[]) {
       // prompts are not counted as tools — no-op for this test
@@ -129,6 +130,7 @@ const savedEnv: Record<string, string | undefined> = {};
 async function load(env: Partial<Record<(typeof ENV_KEYS)[number], string>>) {
   vi.resetModules();
   toolCalls.length = 0;
+  resourceNames.length = 0;
   for (const k of ENV_KEYS) process.env[k] = env[k] ?? "";
   await import("../../src/index.js");
   const { registry } = await import("../../src/tool-registry.js");
@@ -232,5 +234,40 @@ describe("write call sites match registration", () => {
     }
     const registeredWrites = new Map(registry.list().filter((t) => isWriteTool(t.name)).map((t) => [t.name, t.category]));
     expect(Object.fromEntries(sites)).toEqual(Object.fromEntries(registeredWrites));
+  });
+});
+
+describe("category filters also cover resources and search-tools", () => {
+  const ALL_RESOURCES = ["monitor", "dashboard", "slo", "incident", "host", "service", "team", "synthetics", "slo-compliance-snapshot-card"];
+
+  it("registers every resource by default", async () => {
+    await load({});
+    expect([...resourceNames].sort()).toEqual([...ALL_RESOURCES].sort());
+  });
+
+  it("DD_TOOLS=synthetics keeps only the synthetics resource", async () => {
+    await load({ DD_TOOLS: "synthetics" });
+    expect(resourceNames).toEqual(["synthetics"]);
+  });
+
+  it("DD_DISABLE hides a category's resources, including the card that belongs to its tool", async () => {
+    await load({ DD_DISABLE: "monitors,teams" });
+    expect(resourceNames).not.toContain("monitor");
+    expect(resourceNames).not.toContain("slo-compliance-snapshot-card");
+    expect(resourceNames).not.toContain("team");
+    expect(resourceNames).toContain("dashboard");
+  });
+
+  it("every resource name is mapped to a category", async () => {
+    const { RESOURCE_CATEGORY } = await import("../../src/resources.js");
+    expect(Object.keys(RESOURCE_CATEGORY).sort()).toEqual([...ALL_RESOURCES].sort());
+  });
+
+  it("search-tools does not find or count tools of disabled categories", async () => {
+    const { registry } = await load({ DD_TOOLS: "synthetics" });
+    expect(registry.search("monitor", undefined, 50).filter((t) => t.category !== "synthetics")).toEqual([]);
+    expect(registry.search("synthetics", undefined, 50).length).toBeGreaterThan(0);
+    const summary = registry.summary(["synthetics", "monitors", "meta"] as never);
+    expect(Object.keys(summary.categoryBreakdown).filter((c) => c !== "synthetics" && c !== "meta")).toEqual([]);
   });
 });

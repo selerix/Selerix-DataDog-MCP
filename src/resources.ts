@@ -39,7 +39,31 @@ function asJson(uri: string, data: unknown) {
   };
 }
 
-export function registerResources(server: McpServer): void {
+// Each resource belongs to the category of the tool that reads the same entity, so DD_TOOLS / DD_DISABLE
+// hide it together with that tool.
+export const RESOURCE_CATEGORY: Record<string, string> = {
+  monitor: "monitors",
+  dashboard: "dashboards",
+  slo: "metrics",
+  incident: "incidents",
+  host: "infra",
+  service: "apm",
+  team: "teams",
+  synthetics: "synthetics",
+  "slo-compliance-snapshot-card": "monitors", // template for the slo-compliance-snapshot tool
+};
+
+export function registerResources(mcp: McpServer, isEnabled: (category: string) => boolean = () => true): void {
+  // Registers a resource only when its category is enabled. An unmapped name is a coding error, not a default.
+  const server = {
+    registerResource: ((name: string, ...rest: unknown[]) => {
+      const category = RESOURCE_CATEGORY[name];
+      if (!category) throw new Error(`resource "${name}" has no category in RESOURCE_CATEGORY`);
+      if (!isEnabled(category)) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (mcp.registerResource as (...args: unknown[]) => unknown)(name, ...rest);
+    }) as McpServer["registerResource"],
+  };
   server.registerResource(
     "monitor",
     new ResourceTemplate("dd://monitor/{id}", { list: undefined }),

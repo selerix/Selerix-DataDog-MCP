@@ -46,7 +46,9 @@ export class ToolRegistry<TCategory extends string = string> {
   search(query: string, category?: string, limit = 20): ToolEntry<TCategory>[] {
     const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
+    // Selerix change: tools of disabled categories (DD_TOOLS / DD_DISABLE) are not discoverable.
     const scored = this.tools
+      .filter((t) => this.isEnabled(t.category))
       .filter((t) => !category || t.category === category)
       .map((t) => {
         const haystack = `${t.name} ${t.description}`.toLowerCase();
@@ -67,6 +69,7 @@ export class ToolRegistry<TCategory extends string = string> {
   summary(allCategories: readonly TCategory[]) {
     const byCategory = new Map<string, number>();
     for (const t of this.tools) {
+      if (!this.isEnabled(t.category)) continue; // Selerix change: count only what is exposed
       byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + 1);
     }
     return {

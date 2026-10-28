@@ -1586,7 +1586,7 @@ function warnAboutUnknownWriteTokens(): void {
 }
 
 // --- MCP Resources (dd:// URI scheme) ---
-registerResources(server);
+registerResources(server, (category) => registry.isEnabled(category as Category));
 
 // --- MCP Prompts (workflow templates) ---
 registerPrompts(server);
