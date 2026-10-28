@@ -93,6 +93,19 @@ describe("extractTargets", () => {
     expect(extractTargets(["a"], (s) => s)).toBeUndefined();
   });
 
+  it("takes the test ids of trigger-synthetics from tests[].publicId and nothing else from those entries", () => {
+    const out = extractTargets(
+      { tests: [{ publicId: "abc-def-ghi", location: "aws:us-east-2", metadata: { ci: "SECRET-CI" } }, { publicId: "jkl-mno-pqr" }, { other: 1 }, null] },
+      (s) => s,
+    );
+    expect(out).toEqual({ publicIds: ["abc-def-ghi", "jkl-mno-pqr"] });
+    expect(JSON.stringify(out)).not.toMatch(/SECRET-CI|aws:/);
+    expect(extractTargets({ tests: [{ publicId: "x".repeat(500) }, { notId: 1 }] }, (s) => s)).toBeUndefined();
+    const many = Array.from({ length: 50 }, (_, i) => ({ publicId: `id-${i}` }));
+    expect((extractTargets({ tests: many }, (s) => s)?.publicIds as string[]).length).toBe(20);
+    expect(extractTargets({ tests: [{ publicId: "key=abc12345" }] }, () => "[R]")).toEqual({ publicIds: ["[R]"] });
+  });
+
   it("caps long arrays", () => {
     const ids = Array.from({ length: 50 }, (_, i) => `id-${i}`);
     expect((extractTargets({ publicIds: ids }, (s) => s)?.publicIds as string[]).length).toBe(20);
@@ -144,6 +157,19 @@ describe("audit through the handler wrapper", () => {
     expect(JSON.stringify(out)).not.toContain("SECRET-PAYLOAD");
     expect(typeof out[0].durationMs).toBe("number");
     expect(stdout).not.toHaveBeenCalled();
+  });
+
+  it("records 'error', not 'ok', when building the response fails after the handler succeeded", async () => {
+    const { utils, run, lines } = await load({ allowWrite: true });
+    const ctx = { tool: "update-monitor", category: "monitors", write: true };
+    const circular: Record<string, unknown> = {};
+    circular.self = circular; // JSON.stringify throws
+    const handler = utils.wrapToolHandler(async (_p: unknown) => circular);
+    const result = await run(ctx, () => handler({}));
+    expect(result.isError).toBe(true);
+    const out = lines();
+    expect(out).toHaveLength(1); // reported once
+    expect(out[0].outcome).toBe("error");
   });
 
   it("does not log read tools in the default 'writes' mode, but does in 'all'", async () => {

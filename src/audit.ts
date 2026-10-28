@@ -45,6 +45,15 @@ export function extractTargets(params: unknown, redact: (s: string) => string): 
     if (isTarget(value)) out[key] = clean(value);
     else if (Array.isArray(value) && value.every(isTarget)) out[key] = value.slice(0, MAX_TARGETS).map(clean);
   }
+  // Allowlisted nested path: trigger-synthetics sends `tests: [{ publicId }]`. Only the ids are copied,
+  // never the rest of each entry.
+  const tests = (params as Record<string, unknown>).tests;
+  if (!("publicIds" in out) && Array.isArray(tests)) {
+    const ids = tests
+      .map((t) => (t !== null && typeof t === "object" ? (t as Record<string, unknown>).publicId : undefined))
+      .filter(isTarget);
+    if (ids.length > 0) out.publicIds = ids.slice(0, MAX_TARGETS).map(clean);
+  }
   return Object.keys(out).length > 0 ? out : undefined;
 }
 

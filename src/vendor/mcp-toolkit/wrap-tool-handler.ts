@@ -143,12 +143,15 @@ export function createWrapToolHandler(opts: CreateWrapToolHandlerOptions = {}) {
       };
       try {
         const result = await fn(params);
-        notify();
         const expr = (params as Record<string, unknown> | undefined)?.[fieldParam];
         const projected = typeof expr === "string" ? applyExtractFields(result, expr) : result;
-        return {
+        const response: ToolTextResult = {
           content: [{ type: "text", text: JSON.stringify(projected, null, 2) }],
         };
+        // Reported only once the response exists: if building it throws (bad extractFields, circular value),
+        // the caller gets an error and the audit line must say "error", not "ok".
+        notify();
+        return response;
       } catch (error) {
         notify(error);
         for (const ex of extractors) {
