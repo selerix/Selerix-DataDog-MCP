@@ -58,9 +58,11 @@ export const DEFAULT_REDACTION_PATTERNS: readonly RegExp[] = Object.freeze([
 // the word is still there to match; the whole `name=value` / `name: value` pair is replaced.
 export const VALUE_REDACTION_PATTERNS: readonly RegExp[] = Object.freeze([
   /bearer\s+\S+/i,
+  /\bbasic\s+[A-Za-z0-9+/=_-]{8,}/i, // HTTP Basic credentials (base64 of user:password)
+  /\/\/[^\s/:@]+:[^\s/@]+@/, // user:password@ in a URL
   /\beyJ[\w-]+\.[\w-]+\.[\w-]+/, // JWT
   /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, // AWS access key id
-  /(?:api[_-]?key|app[_-]?key|authorization|passw(?:or)?d|secret|token)[\w-]*["']?\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;&}]+)/i, // quoted values may contain escaped quotes
+  /(?:api[_-]?key|app[_-]?key|authorization|passw(?:or)?d|secret|token)[\w-]*["']?\s*[:=]\s*(?:(?:basic|digest|token|apikey)\s+)?(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;&}]+)/i, // quoted values may contain escaped quotes
 ]);
 
 function sanitizeText(text: string, patterns: readonly RegExp[]): string {

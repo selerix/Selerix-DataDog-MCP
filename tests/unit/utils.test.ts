@@ -39,11 +39,14 @@ describe("wrapToolHandler", () => {
       "client_secret=abc123 and access_token: def456",
       "jwt eyJhbGciOi.eyJzdWIiOiIx.SflKxwRJSMeKKF2QT4fw here",
       "key AKIAABCDEFGHIJKLMNOP leaked",
+      "Authorization: Basic dXNlcjpIdW50ZXIyIXg= rejected",
+      "proxy sent basic dXNlcjpIdW50ZXIyIXg= and failed",
+      "request to https://svc:Hunter2!x@host.test/path failed",
     ];
     for (const message of cases) {
       const handler = wrapToolHandler(async () => { throw new Error(message); });
       const text = (await handler({} as any)).content[0].text;
-      expect(text, message).not.toMatch(/Hunter2|tail-part|abc123|def456|eyJ|AKIA/);
+      expect(text, message).not.toMatch(/Hunter2|tail-part|abc123|def456|eyJ|AKIA|dXNlcjpIdW50ZXIyIXg/);
     }
   });
 

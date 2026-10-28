@@ -268,6 +268,8 @@ describe("category filters also cover resources and search-tools", () => {
     expect(registry.search("monitor", undefined, 50).filter((t) => t.category !== "synthetics")).toEqual([]);
     expect(registry.search("synthetics", undefined, 50).length).toBeGreaterThan(0);
     const summary = registry.summary(["synthetics", "monitors", "meta"] as never);
+    const counted = Object.values(summary.categoryBreakdown as Record<string, number>).reduce((x, y) => x + y, 0);
+    expect(summary.total).toBe(counted); // the total covers only what is exposed, not disabled categories
     expect(Object.keys(summary.categoryBreakdown).filter((c) => c !== "synthetics" && c !== "meta")).toEqual([]);
   });
 });

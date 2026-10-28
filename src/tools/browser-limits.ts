@@ -46,6 +46,14 @@ function hostAllowed(hostname: string, allowed: string[]): boolean {
 /** Throws BrowserLimitError when `raw` is not an allowed URL; `what` names it in the message. */
 function checkUrl(raw: unknown, what: string, allowedHosts: string[] | null): void {
   if (typeof raw !== "string" || raw.length === 0) return; // nothing to check (a step with no URL)
+  // With a host list, a {{ variable }} anywhere in the URL is refused: its value is substituted when the test
+  // runs and can change the destination after this check, for example https://{{ T }}@selerix.com/ with
+  // T = "evil.test/#". The URL that is saved is the template, so only a literal URL can be verified.
+  if (allowedHosts && raw.includes("{{")) {
+    throw new BrowserLimitError(
+      `${what} contains a variable reference ({{ }}), whose value could change the destination, so it cannot be checked against DD_BROWSER_URL_HOSTS; use a literal URL`,
+    );
+  }
   let url: URL | undefined;
   try {
     url = new URL(raw);

@@ -69,6 +69,17 @@ describe("URLs", () => {
     expect(() => checkBrowserWrite({ startUrl: "{{ BASE_URL }}" })).toThrow(/use a literal URL/);
   });
 
+  it("with a host list, refuses any {{ variable }} in a URL, because its value can change the destination", () => {
+    cfg.browserUrlHosts = ["selerix.com"];
+    // The parsed host of the first one is selerix.com, but TARGET = "evil.test/#" would send it to evil.test.
+    for (const url of ["https://{{ TARGET }}@selerix.com/", "https://selerix.com/{{ PATH }}", "https://{{ SUB }}.selerix.com/"]) {
+      expect(() => checkBrowserWrite({ startUrl: url }), url).toThrow(/variable reference/);
+      expect(() => checkBrowserWrite({ steps: steps(step("goToUrl", { value: url })) }), url).toThrow(/variable reference/);
+    }
+    cfg.browserUrlHosts = null;
+    expect(() => checkBrowserWrite({ startUrl: "https://{{ TARGET }}@selerix.com/" })).not.toThrow(); // no list, no check
+  });
+
   it("does not look at the URLs of other step types", () => {
     cfg.browserUrlHosts = ["selerix.com"];
     expect(() => checkBrowserWrite({ steps: steps(step("typeText", { value: "https://evil.test/" })) })).not.toThrow();

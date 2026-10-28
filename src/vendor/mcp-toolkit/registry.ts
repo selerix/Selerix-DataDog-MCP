@@ -73,7 +73,7 @@ export class ToolRegistry<TCategory extends string = string> {
       byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + 1);
     }
     return {
-      total: this.tools.length,
+      total: [...byCategory.values()].reduce((a, b) => a + b, 0), // Selerix change: enabled tools only
       enabledCategories: allCategories.filter((c) => this.isEnabled(c)),
       categoryBreakdown: Object.fromEntries(byCategory),
     };
