@@ -76,7 +76,11 @@ function sanitizeStructured(data: StructuredError, patterns: readonly RegExp[]):
 // Selerix change: caller patterns run first, so an exact secret value is removed whole before the
 // generic word patterns (api key, token, ...) can partially match inside it.
 function buildPatterns(opts: CreateWrapToolHandlerOptions): RegExp[] {
-  return [...(opts.redactionPatterns ?? []), ...DEFAULT_REDACTION_PATTERNS];
+  // Also global: without the g flag only the first match in a text was replaced, so a second
+  // "Bearer <value>" or a repeated word stayed visible.
+  return [...(opts.redactionPatterns ?? []), ...DEFAULT_REDACTION_PATTERNS].map((p) =>
+    p.flags.includes("g") ? p : new RegExp(p.source, p.flags + "g"),
+  );
 }
 
 /**

@@ -164,6 +164,14 @@ export async function startMcpServer(
           return;
         }
       }
+      // Selerix change: a stateless transport has no session to stream notifications on, but it accepts
+      // the optional GET /mcp stream and keeps it open, which would hold the one-at-a-time queue until the
+      // client leaves or the request timeout fires. Only POST is served.
+      if (req.method !== "POST") {
+        res.setHeader("Allow", "POST");
+        writeJson(res, 405, { error: "method not allowed" });
+        return;
+      }
       await handleMcpRequest(req, res);
     } catch (err) {
       if (!res.headersSent) {

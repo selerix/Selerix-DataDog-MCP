@@ -30,6 +30,7 @@ import {
   createSyntheticsBrowserTestSchema,
   editSyntheticsGlobalVariable,
   updateSyntheticsBrowserTest,
+  updateSyntheticsBrowserTestSchema,
 } from "../../src/tools/synthetics-browser.js";
 
 const currentTest = () => ({
@@ -69,6 +70,13 @@ describe("updateSyntheticsBrowserTest", () => {
     fake.test = { ...currentTest(), steps: [] };
     await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", tags: ["x"], dryRun: false })).rejects.toThrow(/no steps/);
     expect(puts()).toHaveLength(0);
+  });
+
+  it("rejects an empty steps list, even on a dry run, so a recording cannot be wiped", async () => {
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", steps: [], dryRun: false })).rejects.toThrow(/at least one step/);
+    await expect(updateSyntheticsBrowserTest({ publicId: "kwm-n4j-sqf", steps: [], dryRun: true })).rejects.toThrow(/at least one step/);
+    expect(puts()).toHaveLength(0);
+    expect(updateSyntheticsBrowserTestSchema.safeParse({ publicId: "kwm-n4j-sqf", steps: [] }).success).toBe(false);
   });
 
   it("never saves when the fetched test has no steps field at all", async () => {

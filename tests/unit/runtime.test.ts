@@ -53,6 +53,21 @@ describe("HTTP transport", () => {
     }
   });
 
+  it("answers GET and DELETE with 405 instead of holding the queue with an open stream", async () => {
+    const handle = await start("127.0.0.1");
+    try {
+      const url = `http://127.0.0.1:${handle!.port}/mcp`;
+      const headers = { authorization: "Bearer tok", accept: "text/event-stream" };
+      const get = await Promise.race([fetch(url, { headers }), new Promise<never>((_, rej) => setTimeout(() => rej(new Error("GET hung")), 3000))]);
+      expect(get.status).toBe(405);
+      expect(get.headers.get("allow")).toBe("POST");
+      expect((await fetch(url, { method: "DELETE", headers })).status).toBe(405);
+      expect((await initialize(url, { authorization: "Bearer tok" })).status).toBe(200); // queue still free
+    } finally {
+      await handle?.close();
+    }
+  });
+
   it("serves many requests, one after another (a stateless transport cannot be reused)", async () => {
     const server = new McpServer({ name: "t", version: "0" });
     server.tool("ping", "ping", {}, async () => ({ content: [{ type: "text" as const, text: "pong" }] }));

@@ -150,7 +150,7 @@ export const updateSyntheticsBrowserTestSchema = z.object({
   locations: z.array(z.string()).optional().describe("New test locations (replaces the existing list)"),
   startUrl: z.string().min(1).optional().describe("New start URL"),
   stepUpdates: z.array(stepUpdateSchema).optional().describe("Targeted edits to individual steps. Cannot be combined with steps"),
-  steps: z.array(z.record(z.string(), z.any())).optional().describe("Full replacement list of steps. Cannot be combined with stepUpdates"),
+  steps: z.array(z.record(z.string(), z.any())).min(1).optional().describe("Full replacement list of steps. Cannot be combined with stepUpdates"),
   configVariables: z.array(z.record(z.string(), z.any())).optional().describe("Full replacement of config variables, e.g. references to global variables. Example: [{\"name\":\"USERNAME\",\"type\":\"global\",\"id\":\"<global-variable-id>\"}]"),
   variables: z.array(z.record(z.string(), z.any())).optional().describe("Full replacement of the test's local (extracted) variables"),
   dryRun: z.boolean().optional().default(false).describe("Preview the resulting changes without saving; does not require DD_ALLOW_WRITE"),
@@ -204,6 +204,10 @@ export function updateSyntheticsBrowserTest(params: z.infer<typeof updateSynthet
 async function updateSyntheticsBrowserTestUnlocked(params: z.infer<typeof updateSyntheticsBrowserTestSchema>) {
   if (params.steps && params.stepUpdates) {
     throw new Error("Pass either steps (full replacement) or stepUpdates (targeted edits), not both");
+  }
+  // An empty list would replace the recording with nothing (the schema also enforces this).
+  if (params.steps && params.steps.length === 0) {
+    throw new Error("steps must contain at least one step; an empty list would wipe the recording");
   }
   if (!params.dryRun) assertWriteAllowed();
 

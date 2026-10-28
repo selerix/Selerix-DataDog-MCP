@@ -20,6 +20,15 @@ describe("wrapToolHandler", () => {
     expect(result.content[0].text).toContain("Write operations are disabled");
   });
 
+  it("redacts every occurrence of a secret word or bearer value, not just the first", async () => {
+    const handler = wrapToolHandler(async () => {
+      throw new Error("Bearer abcdef123 retried with Bearer ghijkl456; token and token again");
+    });
+    const result = await handler({} as any);
+    const text = result.content[0].text;
+    expect(text).not.toMatch(/abcdef123|ghijkl456|token/);
+  });
+
   it("catches generic Error and returns sanitized structure", async () => {
     const handler = wrapToolHandler(async () => {
       throw new Error("something failed");
