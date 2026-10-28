@@ -34,6 +34,8 @@ describe("wrapToolHandler", () => {
       "password=Hunter2!x token=abc123 token=def456",
       'body {"password":"Hunter2!x","token": "abc123"} failed',
       "Authorization: Bearer abc123def456 rejected",
+      'body {"password":"Hunter2\\"tail-part","x":1}',
+      "password='Hunter2\\'tail-part' next",
       "client_secret=abc123 and access_token: def456",
       "jwt eyJhbGciOi.eyJzdWIiOiIx.SflKxwRJSMeKKF2QT4fw here",
       "key AKIAABCDEFGHIJKLMNOP leaked",
@@ -41,7 +43,7 @@ describe("wrapToolHandler", () => {
     for (const message of cases) {
       const handler = wrapToolHandler(async () => { throw new Error(message); });
       const text = (await handler({} as any)).content[0].text;
-      expect(text, message).not.toMatch(/Hunter2|abc123|def456|eyJ|AKIA/);
+      expect(text, message).not.toMatch(/Hunter2|tail-part|abc123|def456|eyJ|AKIA/);
     }
   });
 

@@ -50,7 +50,7 @@ export const VALUE_REDACTION_PATTERNS: readonly RegExp[] = Object.freeze([
   /bearer\s+\S+/i,
   /\beyJ[\w-]+\.[\w-]+\.[\w-]+/, // JWT
   /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, // AWS access key id
-  /(?:api[_-]?key|app[_-]?key|authorization|passw(?:or)?d|secret|token)[\w-]*["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;&}]+)/i,
+  /(?:api[_-]?key|app[_-]?key|authorization|passw(?:or)?d|secret|token)[\w-]*["']?\s*[:=]\s*(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;&}]+)/i, // quoted values may contain escaped quotes
 ]);
 
 function sanitizeText(text: string, patterns: readonly RegExp[]): string {
