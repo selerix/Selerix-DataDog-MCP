@@ -11,7 +11,7 @@ Status at 1.22.0 (prepared 2026-10-26, updated 2026-10-28): **ready to publish o
 | Tarball | ~225 files, ~159 KB packed, only `dist/`, `README.md`, `LICENSE`, `server.json`, `package.json`. No `.env`, tests, workflows or source |
 | Runtime | Node 22+, MCP over stdio by default |
 | Tools | 175 in total. With default settings (writes off) the server advertises 101: the read tools, `search-tools` and the two `dryRun`-capable browser-test tools. The other 74 write tools appear only when `DD_WRITE_TOOLS` / `DD_ALLOW_WRITE` allow them |
-| Tests | 142 unit and integration tests |
+| Tests | 144 unit and integration tests |
 
 ## Security summary
 
