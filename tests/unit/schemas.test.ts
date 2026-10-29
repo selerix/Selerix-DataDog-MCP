@@ -5,7 +5,7 @@ const toolModules = import.meta.glob("../../src/tools/*.ts", { eager: true }) as
 
 // Filter out helper modules (no tool registrations)
 const toolEntries = Object.entries(toolModules).filter(
-  ([path]) => !path.endsWith("utils.ts") && !path.endsWith("extract-fields.ts"),
+  ([path]) => !path.endsWith("utils.ts") && !path.endsWith("extract-fields.ts") && !path.endsWith("browser-limits.ts"),
 );
 
 describe("tool schemas", () => {

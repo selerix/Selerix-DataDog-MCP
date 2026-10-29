@@ -70,7 +70,7 @@ export const createRumMetricSchema = z.object({
 });
 
 export async function createRumMetric(params: z.infer<typeof createRumMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-rum-metric", "rum");
 
   const compute = new v2.RumMetricCompute();
   compute.aggregationType = params.aggregationType as v2.RumMetricComputeAggregationType;
@@ -135,7 +135,7 @@ export const updateRumMetricSchema = z.object({
 });
 
 export async function updateRumMetric(params: z.infer<typeof updateRumMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-rum-metric", "rum");
 
   const attrs = new v2.RumMetricUpdateAttributes();
 
@@ -186,7 +186,7 @@ export const deleteRumMetricSchema = z.object({
 });
 
 export async function deleteRumMetric(params: z.infer<typeof deleteRumMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-rum-metric", "rum");
   await rumMetricsApi.deleteRumMetric({ metricId: params.metricId });
   return { deleted: true, metricId: params.metricId };
 }

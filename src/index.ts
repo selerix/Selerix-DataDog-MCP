@@ -4,13 +4,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { startMcpServer } from "@us-all/mcp-toolkit/runtime";
-import { inferToolAnnotations } from "@us-all/mcp-toolkit";
-import { validateConfig } from "./config.js";
+import { startMcpServer } from "./vendor/mcp-toolkit/runtime.js";
+import { inferToolAnnotations, isWriteTool } from "./vendor/mcp-toolkit/index.js";
+import { config, validateConfig } from "./config.js";
+import { toolContext } from "./audit.js";
+import { DRY_RUN_PREVIEW_TOOLS, isWriteToolAllowed } from "./write-policy.js";
 
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
 const { version: pkgVersion } = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
-import { wrapToolHandler } from "./tools/utils.js";
+import { audit, wrapToolHandler } from "./tools/utils.js";
 
 // Tool imports
 import {
@@ -51,6 +53,17 @@ import {
   triggerSyntheticsSchema, triggerSynthetics, createSyntheticsTestSchema, createSyntheticsTest,
   updateSyntheticsTestSchema, updateSyntheticsTest, deleteSyntheticsTestSchema, deleteSyntheticsTest,
 } from "./tools/synthetics.js";
+import {
+  getSyntheticsBrowserTestSchema, getSyntheticsBrowserTest,
+  getSyntheticsBrowserResultsSchema, getSyntheticsBrowserResults,
+  getSyntheticsBrowserResultSchema, getSyntheticsBrowserResult,
+  updateSyntheticsBrowserTestSchema, updateSyntheticsBrowserTest,
+  createSyntheticsBrowserTestSchema, createSyntheticsBrowserTest,
+  setSyntheticsTestStatusSchema, setSyntheticsTestStatus,
+  listSyntheticsGlobalVariablesSchema, listSyntheticsGlobalVariables,
+  getSyntheticsGlobalVariableSchema, getSyntheticsGlobalVariable,
+  editSyntheticsGlobalVariableSchema, editSyntheticsGlobalVariable,
+} from "./tools/synthetics-browser.js";
 import { listDowntimesSchema, listDowntimes, createDowntimeSchema, createDowntime, cancelDowntimeSchema, cancelDowntime } from "./tools/downtimes.js";
 import {
   searchSecuritySignalsSchema, searchSecuritySignals,
@@ -143,7 +156,7 @@ import {
   getWorkflowInstanceSchema, getWorkflowInstance,
 } from "./tools/workflows.js";
 
-import { registry, searchToolsSchema, searchTools, type Category } from "./tool-registry.js";
+import { registry, searchToolsSchema, searchTools, CATEGORIES, type Category } from "./tool-registry.js";
 import { registerResources } from "./resources.js";
 import { registerPrompts } from "./prompts.js";
 import {
@@ -159,14 +172,31 @@ const server = new McpServer({
   version: pkgVersion,
 });
 
-// --- Tool registration with category-based filtering (DD_TOOLS / DD_DISABLE) ---
+// --- Tool registration with category-based filtering (DD_TOOLS / DD_DISABLE) and write scoping (DD_WRITE_TOOLS) ---
 let currentCategory: Category = "metrics";
+const enabledWriteTools: string[] = [];
+const previewOnlyTools: string[] = [];
+let hiddenWriteTools = 0;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tool(name: string, description: string, schema: any, handler: any, annotations?: any): void {
+  const write = isWriteTool(name);
+  // A write tool that is not allowed is neither registered nor advertised (not even through search-tools),
+  // except the dry-run preview tools, which stay available (their real saves are still refused).
+  const writeAllowed = !write || isWriteToolAllowed(config, name, currentCategory);
+  if (!writeAllowed && !DRY_RUN_PREVIEW_TOOLS.includes(name)) {
+    hiddenWriteTools++;
+    return;
+  }
   registry.register(name, description, currentCategory);
   if (registry.isEnabled(currentCategory)) {
-    server.tool(name, description, schema, inferToolAnnotations(name, annotations), handler);
+    if (write && writeAllowed) enabledWriteTools.push(name);
+    else if (write) previewOnlyTools.push(name);
+    const ctx = { tool: name, category: currentCategory, write };
+    // The context tells the handler wrapper's audit hook which tool is running.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const audited = (...args: any[]) => toolContext.run(ctx, () => handler(...args));
+    server.tool(name, description, schema, inferToolAnnotations(name, annotations), audited);
   }
 }
 
@@ -544,6 +574,69 @@ tool(
   "Delete one or more Synthetics tests by public ID",
   deleteSyntheticsTestSchema.shape,
   wrapToolHandler(deleteSyntheticsTest),
+);
+
+tool(
+  "get-synthetics-browser-test",
+  "Get a Synthetics browser test: config, start URL, variables and recorded steps (indexed, with params)",
+  getSyntheticsBrowserTestSchema.shape,
+  wrapToolHandler(getSyntheticsBrowserTest),
+);
+
+tool(
+  "get-synthetics-browser-results",
+  "List the latest results of a Synthetics browser test by public ID (status, duration, step counts)",
+  getSyntheticsBrowserResultsSchema.shape,
+  wrapToolHandler(getSyntheticsBrowserResults),
+);
+
+tool(
+  "get-synthetics-browser-result",
+  "Get one browser test result with per-step details; set onlyProblemSteps to see just failed or skipped steps",
+  getSyntheticsBrowserResultSchema.shape,
+  wrapToolHandler(getSyntheticsBrowserResult),
+);
+
+tool(
+  "update-synthetics-browser-test",
+  "Update a Synthetics browser test: metadata, start URL, individual steps (stepUpdates) or all steps, config/local variables. Use dryRun to preview. Write-gated unless dryRun",
+  updateSyntheticsBrowserTestSchema.shape,
+  wrapToolHandler(updateSyntheticsBrowserTest),
+);
+
+tool(
+  "create-synthetics-browser-test",
+  "Create a Synthetics browser test from a start URL and a list of steps. Created paused by default; use dryRun to preview. Write-gated unless dryRun",
+  createSyntheticsBrowserTestSchema.shape,
+  wrapToolHandler(createSyntheticsBrowserTest),
+);
+
+tool(
+  "set-synthetics-test-status",
+  "Pause (status=paused) or schedule/resume (status=live) one or more Synthetics tests of any type without rewriting them. Write-gated",
+  setSyntheticsTestStatusSchema.shape,
+  wrapToolHandler(setSyntheticsTestStatus),
+);
+
+tool(
+  "list-synthetics-global-variables",
+  "List Synthetics global variables (id, name, tags, secure flag; values are not included)",
+  listSyntheticsGlobalVariablesSchema.shape,
+  wrapToolHandler(listSyntheticsGlobalVariables),
+);
+
+tool(
+  "get-synthetics-global-variable",
+  "Get a Synthetics global variable by ID; the value is returned only for non-secure variables",
+  getSyntheticsGlobalVariableSchema.shape,
+  wrapToolHandler(getSyntheticsGlobalVariable),
+);
+
+tool(
+  "edit-synthetics-global-variable",
+  "Edit a Synthetics global variable (name, description, tags, value). Secure variables need a new value. Write-gated",
+  editSyntheticsGlobalVariableSchema.shape,
+  wrapToolHandler(editSyntheticsGlobalVariable),
 );
 
 // --- Downtimes ---
@@ -1484,11 +1577,22 @@ tool(
   wrapToolHandler(searchTools),
 );
 
+// A DD_WRITE_TOOLS entry that is neither a category, a registered tool nor "all" is almost certainly a typo.
+function warnAboutUnknownWriteTokens(): void {
+  const known = new Set<string>(["all", ...CATEGORIES, ...registry.list().map((t) => t.name)]);
+  for (const token of config.writeTools ?? []) {
+    if (!known.has(token)) console.error(`Warning: DD_WRITE_TOOLS entry "${token}" matches no category or tool and is ignored`);
+  }
+}
+
 // --- MCP Resources (dd:// URI scheme) ---
-registerResources(server);
+registerResources(server, (category) => registry.isEnabled(category as Category));
 
 // --- MCP Prompts (workflow templates) ---
 registerPrompts(server);
+
+warnAboutUnknownWriteTokens();
+audit.started({ writeTools: enabledWriteTools, skippedWriteTools: hiddenWriteTools, previewOnlyTools });
 
 startMcpServer(server).catch((error) => {
   console.error("Fatal error:", error);

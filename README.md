@@ -2,13 +2,9 @@
 
 > **The Datadog MCP that answers _"why is this happening?"_ — not just _"what's the value?"_**
 >
-> Aggregation tools that fold 5–7 sequential API calls into one structured response. Full SLO CRUD. Fleet automation. The widest Datadog API coverage in any MCP — **163 tools** built on the [@us-all MCP standard](https://github.com/us-all/mcp-toolkit/blob/main/STANDARD.md).
+> Aggregation tools that fold 5–7 sequential API calls into one structured response. Full SLO CRUD. Fleet automation. The widest Datadog API coverage in any MCP — **175 tools** built on the [@us-all MCP standard](https://github.com/us-all/mcp-toolkit/blob/main/STANDARD.md).
 
-[![npm](https://img.shields.io/npm/v/@us-all/datadog-mcp)](https://www.npmjs.com/package/@us-all/datadog-mcp)
-[![downloads](https://img.shields.io/npm/dm/@us-all/datadog-mcp)](https://www.npmjs.com/package/@us-all/datadog-mcp)
-[![tools](https://img.shields.io/badge/tools-163-blue)](#full-tool-reference)
-[![@us-all standard](https://img.shields.io/badge/built%20to-%40us--all%20MCP%20standard-blue)](https://github.com/us-all/mcp-toolkit/blob/main/STANDARD.md)
-[![Glama MCP server](https://glama.ai/mcp/servers/us-all/datadog-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/us-all/datadog-mcp-server)
+> **Selerix fork (`@selerix/datadog-mcp`).** Maintained by Selerix, based on the MIT-licensed [`us-all/datadog-mcp-server`](https://github.com/us-all/datadog-mcp-server). It adds Synthetics **browser-test** tools (read tests, results and steps; create tests; edit steps and variables; pause or schedule tests) and global-variable tools, and is published to the Selerix Azure Artifacts feed rather than public npm. See [CHANGELOG.md](./CHANGELOG.md) and [docs/RELEASE.md](./docs/RELEASE.md). The rest of this document is upstream's.
 
 ## What it does that others don't
 
@@ -16,9 +12,9 @@
 - **Full SLO CRUD** — create, update, delete SLOs (and their corrections). The official Bits AI MCP and community alternatives are read-only on SLOs.
 - **Fleet Automation** — 15 tools across deployments and schedules. Only this server.
 - **Status Pages** — 21 tools for full status-page lifecycle (components, degradations, maintenances). Only this server.
-- **Token-efficient by design** — `extractFields` projection, `DD_TOOLS`/`DD_DISABLE` 16-category toggles, and a `search-tools` meta-tool keep LLM context low across 163 tools.
+- **Token-efficient by design** — `extractFields` projection, `DD_TOOLS`/`DD_DISABLE` 16-category toggles, and a `search-tools` meta-tool keep LLM context low across 175 tools.
 - **Apps SDK card** — `slo-compliance-snapshot` renders as a visual card on ChatGPT clients via `_meta["openai/outputTemplate"]`. Claude clients receive the same JSON content (non-breaking).
-- **stdio + Streamable HTTP** — defaults to stdio (Claude Desktop / Code). Set `MCP_TRANSPORT=http` for ChatGPT Apps SDK or remote clients (Bearer auth via `MCP_HTTP_TOKEN`).
+- **stdio + Streamable HTTP** — defaults to stdio (Claude Desktop / Code). Set `MCP_TRANSPORT=http` for a local HTTP client such as the ChatGPT Apps SDK (Bearer auth via `MCP_HTTP_TOKEN`). HTTP mode has one shared Datadog identity and one static token, so it listens on localhost only unless you opt in with `MCP_HTTP_ALLOW_REMOTE=true` behind a gateway that authenticates each user. stdio is the supported mode.
 
 ## Try this — 5 prompts
 
@@ -34,9 +30,9 @@ Connect the server to Claude Desktop or Claude Code, then paste any of these:
 
 Datadog's official MCP (Bits AI MCP, GA 2026-03-09) is **complementary**, not a replacement:
 
-| | Official Datadog MCP | `@us-all/datadog-mcp` (this) |
+| | Official Datadog MCP | `@selerix/datadog-mcp` (this) |
 |--|----------------------|------------------------------|
-| Tool count | 16+ core toolsets | **163 tools** across full API surface |
+| Tool count | 16+ core toolsets | **175 tools** across full API surface |
 | Deployment | Remote (managed by Datadog) | **Self-host** stdio (npx / Docker / npm) |
 | Auth | Datadog SSO | API + APP key |
 | Sites | Public Datadog sites | **Any site, incl. internal/sovereign**; US5 default |
@@ -51,16 +47,36 @@ Use the official Bits AI MCP for fast managed onboarding and SSO. Use this when 
 
 ## Install
 
+The package is published to the Selerix Azure Artifacts feed, not public npm. Point the `@selerix` scope at the feed once, in your user `.npmrc`, together with whatever authentication your organization uses for Azure Artifacts:
+
+```ini
+@selerix:registry=https://pkgs.dev.azure.com/selerix/_packaging/Selerix/npm/registry/
+```
+
+The package's own dependencies come from public npm, so the feed needs npmjs as an upstream source (or the machine needs access to public npm).
+
+Writes are off by default, and write tools are then not even advertised to the model. Set `DD_WRITE_TOOLS=synthetics` (or a list of tool names) to allow only what you need; `DD_ALLOW_WRITE=true` still works but is broader (see [Read-only mode](#read-only-mode)). Use `DD_SITE` for your Datadog site (for example `datadoghq.com`).
+
+### Claude Code
+
+```bash
+claude mcp add datadog -s user \
+  -e DD_API_KEY=<your-api-key> -e DD_APP_KEY=<your-app-key> -e DD_SITE=datadoghq.com \
+  -- npx -y @selerix/datadog-mcp
+```
+
+That stores the keys in plain text in `~/.claude.json`. To keep them out of it, put them in a `.env` file and start the server with `node --env-file=<path-to-.env> <path-to>/dist/index.js` instead (see "Build from source").
+
 ### Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "datadog": {
       "command": "npx",
-      "args": ["-y", "@us-all/datadog-mcp"],
+      "args": ["-y", "@selerix/datadog-mcp"],
       "env": {
         "DD_API_KEY": "<your-api-key>",
         "DD_APP_KEY": "<your-app-key>",
@@ -71,26 +87,13 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Claude Code
-
-```bash
-claude mcp add datadog -s user \
-  -e DD_API_KEY=<your-api-key> -e DD_APP_KEY=<your-app-key> -e DD_SITE=datadoghq.com \
-  -- npx -y @us-all/datadog-mcp
-```
-
-### Docker
-
-```bash
-docker run -e DD_API_KEY=... -e DD_APP_KEY=... -e DD_SITE=datadoghq.com \
-  ghcr.io/us-all/datadog-mcp-server:latest
-```
-
 ### Build from source
 
+Requires Node 22 or newer and pnpm.
+
 ```bash
-git clone https://github.com/us-all/datadog-mcp-server.git
-cd datadog-mcp-server && pnpm install && pnpm build
+git clone https://github.com/selerix/Selerix-DataDog-MCP.git
+cd Selerix-DataDog-MCP && pnpm install && pnpm build
 node dist/index.js
 ```
 
@@ -101,14 +104,21 @@ node dist/index.js
 | `DD_API_KEY` | ✅ | — | Datadog API key |
 | `DD_APP_KEY` | ✅ | — | Datadog Application key |
 | `DD_SITE` | ❌ | `us5.datadoghq.com` | Datadog site (see table below) |
-| `DD_ALLOW_WRITE` | ❌ | `false` | Set `true` to enable mutations (create/update/delete) |
+| `DD_ALLOW_WRITE` | ❌ | `false` | Set `true` to enable write tools in every category **except** `fleet`, `security` and `status-pages`. Ignored when `DD_WRITE_TOOLS` is set. |
+| `DD_WRITE_TOOLS` | ❌ | — | Comma-sep write allowlist of categories and/or tool names (e.g. `synthetics`, `set-synthetics-test-status`), or `all`. When set it replaces `DD_ALLOW_WRITE`. Write tools not listed are not registered. |
+| `DD_BROWSER_STEP_TYPES` | ❌ | — | Step types the browser-test write tools may add or edit (comma-separated, or `all`). Unset: everything except `assertFromJavascript`, `extractFromJavascript` and `runApiTest`, which are refused |
+| `DD_BROWSER_URL_HOSTS` | ❌ | — | Hosts (and their subdomains) that start URLs and `goToUrl` steps written by the tools must stay on, e.g. `selerix.com`. Unset: any http(s) host (other schemes are always refused) |
+| `DD_ALLOW_PRIVATE_LOCATIONS` | ❌ | `false` | Allow the write tools to put a test on a private location (`pl:` id), which runs inside a private network |
+| `DD_AUDIT_LOG` | ❌ | `writes` | Audit log on **stderr**, one JSON line per tool call: `all`, `writes` (write tools only) or `off`. |
 | `DD_TOOLS` | ❌ | — | Comma-sep allowlist of categories. Only these load — biggest token saver. |
 | `DD_DISABLE` | ❌ | — | Comma-sep denylist. Ignored when `DD_TOOLS` is set. |
 | `MCP_TRANSPORT` | ❌ | `stdio` | `http` to enable Streamable HTTP transport |
 | `MCP_HTTP_TOKEN` | conditional | — | Bearer token. Required when `MCP_TRANSPORT=http` |
 | `MCP_HTTP_PORT` | ❌ | `3000` | HTTP listen port |
 | `MCP_HTTP_HOST` | ❌ | `127.0.0.1` | HTTP bind host (DNS rebinding protection auto-enabled for localhost) |
-| `MCP_HTTP_SKIP_AUTH` | ❌ | `false` | Skip Bearer auth — e.g. behind a reverse proxy that handles it |
+| `MCP_HTTP_SKIP_AUTH` | ❌ | `false` | Skip Bearer auth. Only accepted when bound to localhost |
+| `MCP_HTTP_ALLOW_REMOTE` | ❌ | `false` | Allow binding to a non-localhost host. Without it the server refuses to start on any other host |
+| `MCP_HTTP_ALLOWED_HOSTS` | ❌ | — | Comma-separated `host:port` list for the Host-header check on non-localhost binds |
 
 **Categories** (16): `metrics`, `monitors`, `dashboards`, `logs`, `apm`, `rum`, `incidents`, `security`, `synthetics`, `ci`, `infra`, `fleet`, `status-pages`, `oncall`, `teams`, `account`.
 
@@ -138,11 +148,22 @@ Naive setup loads ~25K tokens of tool schema before any conversation. Three knob
 2. **`extractFields` response projection** — `get-dashboard { dashboardId: "abc", extractFields: "id,title,widgets.*.definition.type" }`.
 3. **`search-tools` meta-tool** — always enabled; lets the LLM discover tools at runtime instead of preloading all schemas.
 
-### Read-only mode
+### Read-only mode and scoped writes
 
-By default, all writes are blocked to prevent accidental mutations by AI agents. The following require `DD_ALLOW_WRITE=true`:
+By default no write tool is registered or advertised, so the model cannot even see them, except `create-synthetics-browser-test` and `update-synthetics-browser-test`, which stay listed so their `dryRun` previews work without write permission (a real save is refused). Enable writes with one of:
 
-`create-monitor`, `update-monitor`, `delete-monitor`, `mute-monitor`, `create-dashboard`, `update-dashboard`, `delete-dashboard`, `send-logs`, `post-event`, `trigger-synthetics`, `create-synthetics-test`, `update-synthetics-test`, `delete-synthetics-test`, `create-downtime`, `cancel-downtime`, `create-case`, `update-case-status`, `send-dora-deployment`, `send-dora-incident`, `create-slo`, `update-slo`, `delete-slo`, plus all fleet/status-page/security writes.
+- `DD_WRITE_TOOLS=synthetics` — recommended. A comma-separated list of **categories** (`synthetics`, `monitors`, ...) and/or **tool names** (`set-synthetics-test-status`), or `all`. Only listed write tools are registered. When set, `DD_ALLOW_WRITE` is ignored.
+- `DD_ALLOW_WRITE=true` — kept for existing setups. Enables every write tool **except** the `fleet`, `security` and `status-pages` categories (live agents, security rules, public status pages), which need an explicit `DD_WRITE_TOOLS` entry even then. The two settings are not additive: once `DD_WRITE_TOOLS` is set, list everything you want in it.
+
+Write tools are the ones whose names start with a write verb (`create-`, `update-`, `delete-`, `set-`, `edit-`, `trigger-`, `send-`, `post-`, `mute-`, `cancel-`, `publish-`, ...). Each write handler also re-checks the policy when it runs, and `dryRun` previews never need write permission. A `DD_WRITE_TOOLS` entry that matches nothing is reported on stderr at startup.
+
+### Audit log
+
+Each tool call writes one JSON line to **stderr** (never stdout, which carries the MCP protocol): timestamp, tool, category, `read`/`write`, `outcome` (`ok`, `error` or `blocked`), `durationMs`, the `dryRun` flag, and target identifiers such as `publicId` or `monitorId`. It never contains argument or result values (no step contents, variable values or payloads); error text is redacted. A `server_start` line lists the write tools the process exposes. `DD_AUDIT_LOG=all` also logs read tools; `off` disables it. Ship stderr to Datadog Logs from the host to keep a trail.
+
+```json
+{"ts":"2026-10-28T12:00:00.000Z","event":"tool_call","tool":"set-synthetics-test-status","category":"synthetics","kind":"write","outcome":"ok","durationMs":212,"targets":{"publicIds":["abc-def-ghi"]}}
+```
 
 ## MCP Prompts (4)
 
@@ -159,7 +180,7 @@ Read-only entities by URI: `dd://monitor/{id}`, `dd://dashboard/{id}`, `dd://slo
 
 ## Tool reference
 
-163 tools across 16 categories. Use the `search-tools` meta-tool to discover at runtime; the full list is collapsed below.
+175 tools across 16 categories. Use the `search-tools` meta-tool to discover at runtime; the full list is collapsed below.
 
 | Domain | Tools |
 |--------|------:|

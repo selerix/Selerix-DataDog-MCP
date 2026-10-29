@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0] - 2026-10-26
+
+First Selerix release. Based on upstream `us-all/datadog-mcp-server` 1.21.1.
+
+### Added
+
+- **Synthetics browser-test tools (8)** — `get-synthetics-browser-test`, `get-synthetics-browser-results`, `get-synthetics-browser-result`, `create-synthetics-browser-test`, `update-synthetics-browser-test` (per-step edits, full step replacement, config/local variables, `dryRun`), and `set-synthetics-test-status` (pause / schedule any test without rewriting it).
+- **Synthetics global-variable tools (3)** — `list-synthetics-global-variables`, `get-synthetics-global-variable`, `edit-synthetics-global-variable`.
+- **Scoped writes (`DD_WRITE_TOOLS`)** — a write allowlist of categories and/or tool names (or `all`), e.g. `DD_WRITE_TOOLS=synthetics` or `set-synthetics-test-status`. When set it replaces `DD_ALLOW_WRITE`.
+- **Audit log (`DD_AUDIT_LOG=all|writes|off`, default `writes`)** — one JSON line per tool call on stderr: tool, category, read/write, outcome (`ok`/`error`/`blocked`), duration, `dryRun` flag and target ids (`publicId`, `monitorId`, ...). No argument or result values; error text is redacted. A `server_start` line lists the write tools exposed. An invalid value stops startup.
+- Total tool count 166 → 175. `create-synthetics-browser-test` creates tests paused by default.
+
+### Changed
+
+- Package renamed to `@selerix/datadog-mcp`, published to the Selerix Azure Artifacts feed (`publishConfig.registry`). `server.json` manifest updated to match; a unit test keeps its versions in sync with `package.json`.
+- `@us-all/mcp-toolkit` is vendored into `src/vendor/mcp-toolkit/` (MIT, license included) instead of being an npm dependency.
+- Error redaction now removes the configured `DD_API_KEY` / `DD_APP_KEY` values and walks nested error fields.
+- `update-synthetics-browser-test` and `edit-synthetics-global-variable` serialize their get-merge-save sequence per test / variable, and `set-synthetics-test-status` uses the same per-test lock so an edit cannot undo a pause.
+- `update-synthetics-test` (API tests) takes the same per-test lock, so no tool that rewrites a test can undo a pause.
+- HTTP transport: each request now gets its own transport and requests are handled one at a time. Before, the server answered the first request and then returned HTTP 500 to every later one. A client that disconnects while its request is waiting no longer blocks the queue, and a request that runs longer than 10 minutes is cut off (`requestTimeoutMs`).
+- Error text returned as data (per-test errors of `set-synthetics-test-status`, aggregation `caveats`) is redacted like thrown errors.
+- HTTP transport (`MCP_TRANSPORT=http`): fixed the localhost `Host` allowlist for IPv6 (`MCP_HTTP_HOST=::1`); requests addressed to `[::1]:port` were rejected with 403 even with a valid token. `dotenv` no longer prints its banner to stdout.
+- CI token budget raised from 30000 to 35000 and made adjustable through the `TOKEN_BUDGET` repository variable; the token-stats script ignores a local `.env` `DD_TOOLS` / `DD_DISABLE`.
+- Upstream's public npm and container publish workflows are disabled (`*.yml.disabled`).
+- Security hardening after the architecture review: `DD_SITE` must be an official Datadog site (`datadoghq.com`, `us3`/`us5`/`ap1`/`ap2.datadoghq.com`, `datadoghq.eu`, `ddog-gov.com`) or the server refuses to start; redaction removes the value after `password=`, `token:` and similar, bearer values, JWTs and AWS key ids, and applies to every occurrence; HTTP mode only serves POST (405 otherwise, so an open GET stream cannot block the queue), compares the token in constant time, refuses `MCP_HTTP_SKIP_AUTH` unless bound to localhost, accepts `MCP_HTTP_ALLOWED_HOSTS` and no longer returns raw error text in a 500; `update-synthetics-browser-test` rejects `steps: []`.
+- **Write tools that are not allowed are no longer registered**, so they are not advertised to the model or listed by `search-tools`. Before, all 76 were advertised and refused at call time. With default settings the server now exposes the read tools plus `search-tools` and the two `dryRun`-capable browser-test tools (`create-` and `update-synthetics-browser-test`, whose saves are still refused), 101 in all, instead of 175. An empty `DD_AUDIT_LOG` counts as unset.
+- **`DD_ALLOW_WRITE=true` no longer enables the `fleet`, `security` and `status-pages` write tools.** They act on live agents, security rules and public status pages and now need an explicit `DD_WRITE_TOOLS` entry (e.g. `DD_WRITE_TOOLS=all`). Every other write category behaves as before.
+- `assertWriteAllowed()` takes the tool name and category, so a handler invoked directly is held to the same policy as a registered one. `dryRun` previews still need no write permission.
+- Vendored toolkit: `isWriteTool()` (annotations) and an `onCall` hook on the handler wrapper. `pnpm run token-stats` now measures the full tool set with `DD_WRITE_TOOLS=all`, plus a read-only scenario.
+- **Category filters cover resources and `search-tools` (SEC-9).** `DD_TOOLS` / `DD_DISABLE` now also hide the `dd://` resources of a disabled category, and `search-tools` no longer finds or counts tools of disabled categories.
+- **HTTP mode listens on localhost only unless `MCP_HTTP_ALLOW_REMOTE=true` (SEC-3).** It has one Datadog identity and one static token, so it is not offered as a shared service. stdio remains the supported mode.
+- **Browser-test write limits (SEC-8).** `create-` and `update-synthetics-browser-test` refuse `assertFromJavascript`, `extractFromJavascript` and `runApiTest` steps, non-http(s) URLs and private (`pl:`) locations by default. `DD_BROWSER_STEP_TYPES`, `DD_BROWSER_URL_HOSTS` (host allowlist for start URLs and `goToUrl` steps) and `DD_ALLOW_PRIVATE_LOCATIONS` adjust this. Checked on dry runs too; existing steps are re-checked only when a `stepUpdate` edits their params.
+- **CI and dependency hygiene (SEC-10).** GitHub Actions are pinned to commit SHAs and the Docker base image to a digest; the `dd-trace` CI Visibility preload and `DD_API_KEY` secret were removed from the test step and `dd-trace` was dropped; `vite` ^8.1.6 and `vitest` ^4.1.12. `pnpm audit` is clean for the production and the dev tree (the dev tree had 19 advisories). Dependabot covers npm, github-actions and docker.
+
+### Notes
+
+- Saving a browser test through `update-synthetics-browser-test` makes Datadog assign new public IDs to all steps and trim trailing whitespace from the test name (Datadog rejects the read-only step ID on update). `set-synthetics-test-status` does not have this effect.
+- Writes stay off unless `DD_ALLOW_WRITE=true` or `DD_WRITE_TOOLS` is set; write tools that are not allowed are not advertised.
+
 ## [1.20.0] - 2026-05-17
 
 ### Added
