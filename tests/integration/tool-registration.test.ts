@@ -1,5 +1,12 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { isWriteTool } from "../../src/vendor/mcp-toolkit/annotations.js";
 
+// Each scenario re-imports the whole server (all tool modules), which takes several seconds on a busy machine;
+// the 5s default made these tests time out when the full suite runs in parallel.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
+const resourceNames: string[] = [];
 const toolCalls: { name: string; description: string; annotations?: any }[] = [];
 
 // Mock McpServer to capture tool registrations
@@ -9,8 +16,8 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
       // signature: tool(name, description, schema, annotations, handler)
       toolCalls.push({ name, description, annotations: _args[1] as any });
     }
-    registerResource(..._args: unknown[]) {
-      // resources are not counted as tools — no-op for this test
+    registerResource(name: string, ..._args: unknown[]) {
+      resourceNames.push(name); // resources are not counted as tools
     }
     registerPrompt(..._args: unknown[]) {
       // prompts are not counted as tools — no-op for this test
@@ -51,11 +58,14 @@ const EXPECTED_TOOLS = [
   "list-rum-retention-filters", "get-rum-retention-filter", "create-rum-retention-filter", "update-rum-retention-filter", "delete-rum-retention-filter",
   // Hosts (2)
   "list-hosts", "get-host-totals",
-  // SLOs (3)
-  "list-slos", "get-slo", "get-slo-history",
-  // Synthetics (6)
+  // SLOs (6)
+  "list-slos", "get-slo", "get-slo-history", "create-slo", "update-slo", "delete-slo",
+  // Synthetics (15)
   "list-synthetics", "get-synthetics-result", "trigger-synthetics",
   "create-synthetics-test", "update-synthetics-test", "delete-synthetics-test",
+  "get-synthetics-browser-test", "get-synthetics-browser-results", "get-synthetics-browser-result",
+  "update-synthetics-browser-test", "create-synthetics-browser-test", "set-synthetics-test-status",
+  "list-synthetics-global-variables", "get-synthetics-global-variable", "edit-synthetics-global-variable",
   // Downtimes (3)
   "list-downtimes", "create-downtime", "cancel-downtime",
   // Security (9)
@@ -113,46 +123,153 @@ const EXPECTED_TOOLS = [
   "analyze-monitor-state", "slo-compliance-snapshot", "incident-triage-snapshot",
 ];
 
-describe("tool registration", () => {
-  beforeAll(async () => {
-    toolCalls.length = 0;
-    await import("../../src/index.js");
+const ENV_KEYS = ["DD_ALLOW_WRITE", "DD_WRITE_TOOLS", "DD_TOOLS", "DD_DISABLE"] as const;
+const savedEnv: Record<string, string | undefined> = {};
+
+// config.ts reads the environment at import time, so each scenario loads a fresh copy of the server.
+async function load(env: Partial<Record<(typeof ENV_KEYS)[number], string>>) {
+  vi.resetModules();
+  toolCalls.length = 0;
+  resourceNames.length = 0;
+  for (const k of ENV_KEYS) process.env[k] = env[k] ?? "";
+  await import("../../src/index.js");
+  const { registry } = await import("../../src/tool-registry.js");
+  return { names: toolCalls.map((t) => t.name), registry };
+}
+
+const WRITE_TOOLS = EXPECTED_TOOLS.filter(isWriteTool);
+const READ_TOOLS = EXPECTED_TOOLS.filter((n) => !isWriteTool(n));
+const OPT_IN_CATEGORIES = ["fleet", "security", "status-pages"];
+
+beforeEach(() => { for (const k of ENV_KEYS) savedEnv[k] = process.env[k]; });
+afterEach(() => { for (const k of ENV_KEYS) process.env[k] = savedEnv[k]; });
+
+describe("tool registration (default: writes off)", () => {
+  // The only write tools still advertised when writes are off: their dryRun previews need no permission.
+  const PREVIEW_TOOLS = ["create-synthetics-browser-test", "update-synthetics-browser-test"];
+
+  it("registers the read tools, search-tools and the dry-run preview tools, and no other write tool", async () => {
+    const { names } = await load({});
+    expect(WRITE_TOOLS).toHaveLength(76);
+    expect(names.filter(isWriteTool).sort()).toEqual(PREVIEW_TOOLS);
+    expect(names).toHaveLength(READ_TOOLS.length + 1 + PREVIEW_TOOLS.length); // + search-tools + previews
+    for (const expected of READ_TOOLS) expect(names, `missing tool: ${expected}`).toContain(expected);
   });
 
-  it("registers exactly 166 tools (162 datadog + 3 aggregations + 1 search-tools meta)", () => {
-    expect(toolCalls).toHaveLength(166);
+  it("does not list other hidden write tools through search-tools either", async () => {
+    const { registry } = await load({});
+    expect(registry.list().filter((t) => isWriteTool(t.name)).map((t) => t.name).sort()).toEqual(PREVIEW_TOOLS);
   });
+});
 
-  it("applies inferred annotations to every tool (read/write/destructive hints)", () => {
-    const byName = new Map(toolCalls.map((t) => [t.name, t.annotations]));
-    // every tool carries annotations with openWorldHint
+describe("tool registration (writes enabled)", () => {
+  it("DD_WRITE_TOOLS=all registers all 175 tools with inferred annotations", async () => {
+    const { names } = await load({ DD_WRITE_TOOLS: "all" });
+    expect(toolCalls).toHaveLength(175);
+    for (const expected of EXPECTED_TOOLS) expect(names, `missing tool: ${expected}`).toContain(expected);
+    expect(new Set(names).size).toBe(names.length); // no duplicates
     expect(toolCalls.every((t) => t.annotations?.openWorldHint === true)).toBe(true);
-    // read tool
+    expect(toolCalls.every((t) => t.description.length > 0)).toBe(true);
+    const byName = new Map(toolCalls.map((t) => [t.name, t.annotations]));
     expect(byName.get("get-monitors")?.readOnlyHint).toBe(true);
-    // write, non-destructive
     expect(byName.get("create-monitor")?.readOnlyHint).toBe(false);
     expect(byName.get("create-monitor")?.destructiveHint).toBeUndefined();
-    // destructive write
     expect(byName.get("delete-monitor")?.readOnlyHint).toBe(false);
     expect(byName.get("delete-monitor")?.destructiveHint).toBe(true);
   });
 
-  it("registers all expected tool names", () => {
-    const registeredNames = toolCalls.map((t) => t.name);
-    for (const expected of EXPECTED_TOOLS) {
-      expect(registeredNames, `missing tool: ${expected}`).toContain(expected);
-    }
+  it("DD_ALLOW_WRITE=true keeps working but leaves fleet, security and status-page writes off", async () => {
+    const { names, registry } = await load({ DD_ALLOW_WRITE: "true" });
+    const categoryOf = new Map(registry.list().map((t) => [t.name, t.category]));
+    const writes = names.filter(isWriteTool);
+    expect(writes).toContain("create-monitor");
+    expect(writes).toContain("set-synthetics-test-status");
+    expect(writes.filter((n) => OPT_IN_CATEGORIES.includes(categoryOf.get(n) as string))).toEqual([]);
+    const hidden = WRITE_TOOLS.filter((n) => !names.includes(n));
+    expect(hidden.length).toBeGreaterThan(0);
+    expect(hidden).toContain("create-fleet-schedule");
+    expect(hidden).toContain("delete-security-rule");
+    expect(hidden).toContain("publish-status-page");
   });
 
-  it("has no duplicate tool names", () => {
-    const names = toolCalls.map((t) => t.name);
-    const unique = new Set(names);
-    expect(unique.size).toBe(names.length);
+  it("DD_WRITE_TOOLS=synthetics enables only the synthetics writes, even with DD_ALLOW_WRITE=true", async () => {
+    const { names, registry } = await load({ DD_WRITE_TOOLS: "synthetics", DD_ALLOW_WRITE: "true" });
+    const categoryOf = new Map(registry.list().map((t) => [t.name, t.category]));
+    const writes = names.filter(isWriteTool);
+    expect(writes.length).toBeGreaterThan(0);
+    expect(writes.every((n) => categoryOf.get(n) === "synthetics")).toBe(true);
+    expect(writes).not.toContain("create-monitor");
   });
 
-  it("every tool has a non-empty description", () => {
-    for (const tool of toolCalls) {
-      expect(tool.description.length, `${tool.name} has empty description`).toBeGreaterThan(0);
+  it("DD_WRITE_TOOLS accepts single tool names and opt-in categories", async () => {
+    const { names } = await load({ DD_WRITE_TOOLS: "set-synthetics-test-status, fleet" });
+    const writes = names.filter(isWriteTool);
+    expect(writes).toContain("set-synthetics-test-status");
+    expect(writes).toContain("create-fleet-schedule");
+    expect(writes).toContain("update-synthetics-browser-test"); // advertised for dryRun previews only; its saves stay blocked
+    expect(writes).not.toContain("edit-synthetics-global-variable");
+    expect(writes).not.toContain("create-monitor");
+  });
+
+  it("a write tool in a category disabled by DD_DISABLE is not registered even when allowed", async () => {
+    const { names } = await load({ DD_WRITE_TOOLS: "all", DD_DISABLE: "synthetics" });
+    expect(names).not.toContain("set-synthetics-test-status");
+    expect(names).toContain("create-monitor");
+  });
+});
+
+describe("write call sites match registration", () => {
+  // Every write tool's handler names itself and its category in assertWriteAllowed("tool", "category"); a wrong
+  // pair would let a directly-called handler escape (or wrongly hit) the policy, so compare with the registry.
+  it("each write tool has exactly one matching assertWriteAllowed(tool, category) call, and no stray ones", async () => {
+    const { registry } = await load({ DD_WRITE_TOOLS: "all" });
+    const sites = new Map<string, string>();
+    for (const f of readdirSync("src/tools").filter((n) => n.endsWith(".ts") && n !== "utils.ts")) {
+      const text = readFileSync(`src/tools/${f}`, "utf8");
+      for (const m of text.matchAll(/assertWriteAllowed\("([^"]+)", "([^"]+)"\)/g)) {
+        expect(sites.has(m[1]), `duplicate call site for ${m[1]}`).toBe(false);
+        sites.set(m[1], m[2]);
+      }
+      expect(text, `${f} calls assertWriteAllowed without a tool name`).not.toMatch(/assertWriteAllowed\(\)/);
     }
+    const registeredWrites = new Map(registry.list().filter((t) => isWriteTool(t.name)).map((t) => [t.name, t.category]));
+    expect(Object.fromEntries(sites)).toEqual(Object.fromEntries(registeredWrites));
+  });
+});
+
+describe("category filters also cover resources and search-tools", () => {
+  const ALL_RESOURCES = ["monitor", "dashboard", "slo", "incident", "host", "service", "team", "synthetics", "slo-compliance-snapshot-card"];
+
+  it("registers every resource by default", async () => {
+    await load({});
+    expect([...resourceNames].sort()).toEqual([...ALL_RESOURCES].sort());
+  });
+
+  it("DD_TOOLS=synthetics keeps only the synthetics resource", async () => {
+    await load({ DD_TOOLS: "synthetics" });
+    expect(resourceNames).toEqual(["synthetics"]);
+  });
+
+  it("DD_DISABLE hides a category's resources, including the card that belongs to its tool", async () => {
+    await load({ DD_DISABLE: "monitors,teams" });
+    expect(resourceNames).not.toContain("monitor");
+    expect(resourceNames).not.toContain("slo-compliance-snapshot-card");
+    expect(resourceNames).not.toContain("team");
+    expect(resourceNames).toContain("dashboard");
+  });
+
+  it("every resource name is mapped to a category", async () => {
+    const { RESOURCE_CATEGORY } = await import("../../src/resources.js");
+    expect(Object.keys(RESOURCE_CATEGORY).sort()).toEqual([...ALL_RESOURCES].sort());
+  });
+
+  it("search-tools does not find or count tools of disabled categories", async () => {
+    const { registry } = await load({ DD_TOOLS: "synthetics" });
+    expect(registry.search("monitor", undefined, 50).filter((t) => t.category !== "synthetics")).toEqual([]);
+    expect(registry.search("synthetics", undefined, 50).length).toBeGreaterThan(0);
+    const summary = registry.summary(["synthetics", "monitors", "meta"] as never);
+    const counted = Object.values(summary.categoryBreakdown as Record<string, number>).reduce((x, y) => x + y, 0);
+    expect(summary.total).toBe(counted); // the total covers only what is exposed, not disabled categories
+    expect(Object.keys(summary.categoryBreakdown).filter((c) => c !== "synthetics" && c !== "meta")).toEqual([]);
   });
 });

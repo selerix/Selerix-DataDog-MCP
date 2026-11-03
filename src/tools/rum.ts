@@ -133,7 +133,7 @@ export const createRumApplicationSchema = z.object({
 });
 
 export async function createRumApplication(params: z.infer<typeof createRumApplicationSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-rum-application", "rum");
 
   const attrs = new v2.RUMApplicationCreateAttributes();
   attrs.name = params.name;
@@ -167,7 +167,7 @@ export const updateRumApplicationSchema = z.object({
 });
 
 export async function updateRumApplication(params: z.infer<typeof updateRumApplicationSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-rum-application", "rum");
 
   const attrs = new v2.RUMApplicationUpdateAttributes();
   if (params.name) attrs.name = params.name;
@@ -199,7 +199,7 @@ export const deleteRumApplicationSchema = z.object({
 });
 
 export async function deleteRumApplication(params: z.infer<typeof deleteRumApplicationSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-rum-application", "rum");
   await rumApi.deleteRUMApplication({ id: params.id });
   return { deleted: true, id: params.id };
 }

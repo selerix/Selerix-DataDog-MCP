@@ -95,7 +95,7 @@ export const sendLogsSchema = z.object({
 });
 
 export async function sendLogs(params: z.infer<typeof sendLogsSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("send-logs", "logs");
   const response = await logsV1Api.submitLog({
     body: params.logs.map((log) => ({
       message: log.message,

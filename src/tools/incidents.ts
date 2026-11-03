@@ -95,7 +95,7 @@ export const createIncidentSchema = z.object({
 });
 
 export async function createIncident(params: z.infer<typeof createIncidentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-incident", "incidents");
 
   const attributes = new v2.IncidentCreateAttributes();
   attributes.title = params.title;
@@ -129,7 +129,7 @@ export const updateIncidentSchema = z.object({
 });
 
 export async function updateIncident(params: z.infer<typeof updateIncidentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-incident", "incidents");
 
   const attributes = new v2.IncidentUpdateAttributes();
   if (params.title !== undefined) attributes.title = params.title;
@@ -162,7 +162,7 @@ export const deleteIncidentSchema = z.object({
 });
 
 export async function deleteIncident(params: z.infer<typeof deleteIncidentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-incident", "incidents");
 
   await incidentsApi.deleteIncident({
     incidentId: params.incidentId,

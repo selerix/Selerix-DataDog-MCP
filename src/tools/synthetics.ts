@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import { syntheticsApi } from "../client.js";
-import { assertWriteAllowed } from "./utils.js";
+import { assertWriteAllowed, testLockKey, withLock } from "./utils.js";
 
 export const listSyntheticsSchema = z.object({
   pageSize: z.coerce.number().optional().default(100).describe("Number of tests per page"),
@@ -69,7 +69,7 @@ export const triggerSyntheticsSchema = z.object({
 });
 
 export async function triggerSynthetics(params: z.infer<typeof triggerSyntheticsSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("trigger-synthetics", "synthetics");
   const response = await syntheticsApi.triggerTests({
     body: {
       tests: params.tests.map((t) => ({
@@ -103,7 +103,7 @@ export const createSyntheticsTestSchema = z.object({
 });
 
 export async function createSyntheticsTest(params: z.infer<typeof createSyntheticsTestSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-synthetics-test", "synthetics");
   const response = await syntheticsApi.createSyntheticsAPITest({
     body: {
       name: params.name,
@@ -150,8 +150,14 @@ export const updateSyntheticsTestSchema = z.object({
   assertions: z.array(z.record(z.string(), z.any())).optional().describe("New assertions"),
 });
 
-export async function updateSyntheticsTest(params: z.infer<typeof updateSyntheticsTestSchema>) {
-  assertWriteAllowed();
+export function updateSyntheticsTest(params: z.infer<typeof updateSyntheticsTestSchema>) {
+  // Selerix change: same per-test lock as pause/schedule and browser-test edits. This edit re-sends the
+  // status it read, so without the lock it could restart a test that was paused in between.
+  return withLock(testLockKey(params.publicId), () => updateSyntheticsTestUnlocked(params));
+}
+
+async function updateSyntheticsTestUnlocked(params: z.infer<typeof updateSyntheticsTestSchema>) {
+  assertWriteAllowed("update-synthetics-test", "synthetics");
   const current = await syntheticsApi.getAPITest({ publicId: params.publicId });
 
   const response = await syntheticsApi.updateAPITest({
@@ -189,7 +195,7 @@ export const deleteSyntheticsTestSchema = z.object({
 });
 
 export async function deleteSyntheticsTest(params: z.infer<typeof deleteSyntheticsTestSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-synthetics-test", "synthetics");
   const response = await syntheticsApi.deleteTests({
     body: {
       publicIds: params.publicIds,

@@ -111,7 +111,7 @@ export const deleteSecurityRuleSchema = z.object({
 });
 
 export async function deleteSecurityRule(params: z.infer<typeof deleteSecurityRuleSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-security-rule", "security");
 
   await securityMonitoringApi.deleteSecurityMonitoringRule({
     ruleId: params.ruleId,
@@ -171,7 +171,7 @@ export const createSecuritySuppressionSchema = z.object({
 });
 
 export async function createSecuritySuppression(params: z.infer<typeof createSecuritySuppressionSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-security-suppression", "security");
 
   const attributes = new v2.SecurityMonitoringSuppressionCreateAttributes();
   attributes.name = params.name;
@@ -203,7 +203,7 @@ export const deleteSecuritySuppressionSchema = z.object({
 });
 
 export async function deleteSecuritySuppression(params: z.infer<typeof deleteSecuritySuppressionSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-security-suppression", "security");
 
   await securityMonitoringApi.deleteSecurityMonitoringSuppression({
     suppressionId: params.suppressionId,

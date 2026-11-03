@@ -11,7 +11,7 @@ export const sendDoraDeploymentSchema = z.object({
 });
 
 export async function sendDoraDeployment(params: z.infer<typeof sendDoraDeploymentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("send-dora-deployment", "ci");
 
   const response = await doraMetricsApi.createDORADeployment({
     body: {
@@ -44,7 +44,7 @@ export const sendDoraIncidentSchema = z.object({
 });
 
 export async function sendDoraIncident(params: z.infer<typeof sendDoraIncidentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("send-dora-incident", "ci");
 
   const response = await doraMetricsApi.createDORAIncident({
     body: {

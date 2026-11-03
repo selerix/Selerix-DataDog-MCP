@@ -52,7 +52,7 @@ export const postEventSchema = z.object({
 });
 
 export async function postEvent(params: z.infer<typeof postEventSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("post-event", "logs");
   const response = await eventsApi.createEvent({
     body: {
       title: params.title,

@@ -40,7 +40,7 @@ export const createApmRetentionFilterSchema = z.object({
 });
 
 export async function createApmRetentionFilter(params: z.infer<typeof createApmRetentionFilterSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-apm-retention-filter", "apm");
 
   const filter = new v2.SpansFilterCreate();
   filter.query = params.filterQuery;
@@ -74,7 +74,7 @@ export const updateApmRetentionFilterSchema = z.object({
 });
 
 export async function updateApmRetentionFilter(params: z.infer<typeof updateApmRetentionFilterSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-apm-retention-filter", "apm");
 
   const filter = new v2.SpansFilterCreate();
   filter.query = params.filterQuery;
@@ -107,7 +107,7 @@ export const deleteApmRetentionFilterSchema = z.object({
 });
 
 export async function deleteApmRetentionFilter(params: z.infer<typeof deleteApmRetentionFilterSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-apm-retention-filter", "apm");
   await apmRetentionFiltersApi.deleteApmRetentionFilter({
     filterId: params.filterId,
   });

@@ -143,7 +143,7 @@ export const createFleetDeploymentConfigureSchema = z.object({
 });
 
 export async function createFleetDeploymentConfigure(params: z.infer<typeof createFleetDeploymentConfigureSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-fleet-deployment-configure", "fleet");
 
   const attributes = new v2.FleetDeploymentConfigureAttributes();
   if (params.filterQuery !== undefined) attributes.filterQuery = params.filterQuery;
@@ -175,7 +175,7 @@ export const createFleetDeploymentUpgradeSchema = z.object({
 });
 
 export async function createFleetDeploymentUpgrade(params: z.infer<typeof createFleetDeploymentUpgradeSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-fleet-deployment-upgrade", "fleet");
 
   const attributes = new v2.FleetDeploymentPackageUpgradeAttributes();
   if (params.filterQuery !== undefined) attributes.filterQuery = params.filterQuery;
@@ -202,7 +202,7 @@ export const cancelFleetDeploymentSchema = z.object({
 });
 
 export async function cancelFleetDeployment(params: z.infer<typeof cancelFleetDeploymentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("cancel-fleet-deployment", "fleet");
   await fleetAutomationApi.cancelFleetDeployment({ deploymentId: params.deploymentId });
   return { cancelled: true, deploymentId: params.deploymentId };
 }
@@ -246,7 +246,7 @@ export const createFleetScheduleSchema = z.object({
 });
 
 export async function createFleetSchedule(params: z.infer<typeof createFleetScheduleSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-fleet-schedule", "fleet");
 
   const rule = new v2.FleetScheduleRecurrenceRule();
   rule.daysOfWeek = params.rule.daysOfWeek;
@@ -287,7 +287,7 @@ export const updateFleetScheduleSchema = z.object({
 });
 
 export async function updateFleetSchedule(params: z.infer<typeof updateFleetScheduleSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-fleet-schedule", "fleet");
 
   const attributes = new v2.FleetSchedulePatchAttributes();
   if (params.name !== undefined) attributes.name = params.name;
@@ -319,7 +319,7 @@ export const deleteFleetScheduleSchema = z.object({
 });
 
 export async function deleteFleetSchedule(params: z.infer<typeof deleteFleetScheduleSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-fleet-schedule", "fleet");
   await fleetAutomationApi.deleteFleetSchedule({ id: params.id });
   return { deleted: true, id: params.id };
 }
@@ -329,7 +329,7 @@ export const triggerFleetScheduleSchema = z.object({
 });
 
 export async function triggerFleetSchedule(params: z.infer<typeof triggerFleetScheduleSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("trigger-fleet-schedule", "fleet");
   const response = await fleetAutomationApi.triggerFleetSchedule({ id: params.id });
   return formatDeployment(response.data!);
 }

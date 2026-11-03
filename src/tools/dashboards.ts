@@ -82,7 +82,7 @@ export const createDashboardSchema = z.object({
 });
 
 export async function createDashboard(params: z.infer<typeof createDashboardSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-dashboard", "dashboards");
   const response = await dashboardsApi.createDashboard({
     body: {
       title: params.title,
@@ -114,7 +114,7 @@ export const updateDashboardSchema = z.object({
 });
 
 export async function updateDashboard(params: z.infer<typeof updateDashboardSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-dashboard", "dashboards");
   const response = await dashboardsApi.updateDashboard({
     dashboardId: params.dashboardId,
     body: {
@@ -141,7 +141,7 @@ export const deleteDashboardSchema = z.object({
 });
 
 export async function deleteDashboard(params: z.infer<typeof deleteDashboardSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-dashboard", "dashboards");
   const response = await dashboardsApi.deleteDashboard({
     dashboardId: params.dashboardId,
   });

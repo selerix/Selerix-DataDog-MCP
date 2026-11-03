@@ -46,7 +46,7 @@ export const createStatusPageSchema = z.object({
 });
 
 export async function createStatusPage(params: z.infer<typeof createStatusPageSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-status-page", "status-pages");
 
   const attributes = new v2.CreateStatusPageRequestDataAttributes();
   attributes.name = params.name;
@@ -74,7 +74,7 @@ export const updateStatusPageSchema = z.object({
 });
 
 export async function updateStatusPage(params: z.infer<typeof updateStatusPageSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-status-page", "status-pages");
 
   const attributes = new v2.PatchStatusPageRequestDataAttributes();
   if (params.name !== undefined) attributes.name = params.name;
@@ -98,7 +98,7 @@ export const deleteStatusPageSchema = z.object({
 });
 
 export async function deleteStatusPage(params: z.infer<typeof deleteStatusPageSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-status-page", "status-pages");
   await statusPagesApi.deleteStatusPage({ pageId: params.pageId });
   return { deleted: true, pageId: params.pageId };
 }
@@ -108,7 +108,7 @@ export const publishStatusPageSchema = z.object({
 });
 
 export async function publishStatusPage(params: z.infer<typeof publishStatusPageSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("publish-status-page", "status-pages");
   await statusPagesApi.publishStatusPage({ pageId: params.pageId });
   return { published: true, pageId: params.pageId };
 }
@@ -118,7 +118,7 @@ export const unpublishStatusPageSchema = z.object({
 });
 
 export async function unpublishStatusPage(params: z.infer<typeof unpublishStatusPageSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("unpublish-status-page", "status-pages");
   await statusPagesApi.unpublishStatusPage({ pageId: params.pageId });
   return { unpublished: true, pageId: params.pageId };
 }
@@ -161,7 +161,7 @@ export const createStatusPageComponentSchema = z.object({
 });
 
 export async function createStatusPageComponent(params: z.infer<typeof createStatusPageComponentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-status-page-component", "status-pages");
 
   const attributes = new v2.CreateComponentRequestDataAttributes();
   attributes.name = params.name;
@@ -187,7 +187,7 @@ export const updateStatusPageComponentSchema = z.object({
 });
 
 export async function updateStatusPageComponent(params: z.infer<typeof updateStatusPageComponentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-status-page-component", "status-pages");
 
   const attributes = new v2.PatchComponentRequestDataAttributes();
   if (params.name !== undefined) attributes.name = params.name;
@@ -215,7 +215,7 @@ export const deleteStatusPageComponentSchema = z.object({
 });
 
 export async function deleteStatusPageComponent(params: z.infer<typeof deleteStatusPageComponentSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-status-page-component", "status-pages");
   await statusPagesApi.deleteComponent({ pageId: params.pageId, componentId: params.componentId });
   return { deleted: true, pageId: params.pageId, componentId: params.componentId };
 }
@@ -274,7 +274,7 @@ export const createStatusPageDegradationSchema = z.object({
 });
 
 export async function createStatusPageDegradation(params: z.infer<typeof createStatusPageDegradationSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-status-page-degradation", "status-pages");
 
   const attributes = new v2.CreateDegradationRequestDataAttributes();
   attributes.title = params.title;
@@ -316,7 +316,7 @@ export const updateStatusPageDegradationSchema = z.object({
 });
 
 export async function updateStatusPageDegradation(params: z.infer<typeof updateStatusPageDegradationSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-status-page-degradation", "status-pages");
 
   const attributes = new v2.PatchDegradationRequestDataAttributes();
   if (params.title !== undefined) attributes.title = params.title;
@@ -354,7 +354,7 @@ export const deleteStatusPageDegradationSchema = z.object({
 });
 
 export async function deleteStatusPageDegradation(params: z.infer<typeof deleteStatusPageDegradationSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-status-page-degradation", "status-pages");
   await statusPagesApi.deleteDegradation({ pageId: params.pageId, degradationId: params.degradationId });
   return { deleted: true, pageId: params.pageId, degradationId: params.degradationId };
 }
@@ -415,7 +415,7 @@ export const createStatusPageMaintenanceSchema = z.object({
 });
 
 export async function createStatusPageMaintenance(params: z.infer<typeof createStatusPageMaintenanceSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-status-page-maintenance", "status-pages");
 
   const attributes = new v2.CreateMaintenanceRequestDataAttributes();
   attributes.title = params.title;
@@ -462,7 +462,7 @@ export const updateStatusPageMaintenanceSchema = z.object({
 });
 
 export async function updateStatusPageMaintenance(params: z.infer<typeof updateStatusPageMaintenanceSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-status-page-maintenance", "status-pages");
 
   const attributes = new v2.PatchMaintenanceRequestDataAttributes();
   if (params.title !== undefined) attributes.title = params.title;

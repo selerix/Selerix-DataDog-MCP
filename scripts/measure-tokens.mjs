@@ -4,16 +4,32 @@
 // Usage: pnpm build && pnpm token-stats
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_ENTRY = path.resolve(__dirname, "..", "dist", "index.js");
 
-const BASE_ENV = { DD_API_KEY: "x", DD_APP_KEY: "x" };
+// Empty DD_TOOLS/DD_DISABLE stop a local .env (which the server loads) from narrowing the "default" scenario.
+// DD_WRITE_TOOLS=all measures the full surface (write tools are otherwise not registered); the read-only scenario shows the default.
+const BASE_ENV = { DD_API_KEY: "x", DD_APP_KEY: "x", DD_TOOLS: "", DD_DISABLE: "", DD_ALLOW_WRITE: "", DD_WRITE_TOOLS: "all", DD_AUDIT_LOG: "off" };
+
+// TOKEN_BUDGET: process env wins (CI sets it), then a TOKEN_BUDGET line in the repo's .env, else 0 (no guard).
+// Only that one key is read from .env so the rest of a developer's settings stay out of this script.
+function resolveBudget() {
+  if (process.env.TOKEN_BUDGET !== undefined) return Number(process.env.TOKEN_BUDGET);
+  try {
+    const parsed = dotenv.parse(readFileSync(path.resolve(__dirname, "..", ".env")));
+    if (parsed.TOKEN_BUDGET !== undefined) return Number(parsed.TOKEN_BUDGET);
+  } catch {}
+  return 0;
+}
 
 const SCENARIOS = [
-  { label: "default", env: {} },
+  { label: "default (all tools, writes enabled)", env: {} },
+  { label: "read-only (no writes enabled)", env: { DD_WRITE_TOOLS: "" } },
   { label: "narrow (metrics,monitors)", env: { DD_TOOLS: "metrics,monitors" } },
   { label: "typical (metrics,monitors,logs,apm,dashboards)", env: { DD_TOOLS: "metrics,monitors,logs,apm,dashboards" } },
 ];
@@ -66,9 +82,12 @@ for (const { label, env } of SCENARIOS) {
 }
 
 // Regression guard: fail CI if default tokens grow unexpectedly.
-// Threshold can be set via TOKEN_BUDGET env (max acceptable default tokens).
-const budget = Number(process.env.TOKEN_BUDGET ?? 0);
-if (budget > 0 && baseline > budget) {
+// Threshold comes from TOKEN_BUDGET (env or .env; max acceptable default tokens).
+const budget = resolveBudget();
+if (Number.isNaN(budget)) {
+  console.error("\n❌ TOKEN_BUDGET is not a number");
+  exitCode = 1;
+} else if (budget > 0 && baseline > budget) {
   console.error(`\n❌ default schema tokens (${baseline}) exceed TOKEN_BUDGET=${budget}`);
   exitCode = 2;
 }

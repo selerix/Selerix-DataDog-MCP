@@ -49,7 +49,7 @@ export const createSpansMetricSchema = z.object({
 });
 
 export async function createSpansMetric(params: z.infer<typeof createSpansMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-spans-metric", "apm");
 
   const compute = new v2.SpansMetricCompute();
   compute.aggregationType = params.aggregationType as v2.SpansMetricComputeAggregationType;
@@ -99,7 +99,7 @@ export const updateSpansMetricSchema = z.object({
 });
 
 export async function updateSpansMetric(params: z.infer<typeof updateSpansMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-spans-metric", "apm");
 
   const attrs = new v2.SpansMetricUpdateAttributes();
 
@@ -142,7 +142,7 @@ export const deleteSpansMetricSchema = z.object({
 });
 
 export async function deleteSpansMetric(params: z.infer<typeof deleteSpansMetricSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-spans-metric", "apm");
   await spansMetricsApi.deleteSpansMetric({ metricId: params.metricId });
   return { deleted: true, metricId: params.metricId };
 }

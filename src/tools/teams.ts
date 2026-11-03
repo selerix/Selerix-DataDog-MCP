@@ -50,7 +50,7 @@ export const createTeamSchema = z.object({
 });
 
 export async function createTeam(params: z.infer<typeof createTeamSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("create-team", "teams");
 
   const attributes = new v2.TeamCreateAttributes();
   attributes.name = params.name;
@@ -79,7 +79,7 @@ export const updateTeamSchema = z.object({
 });
 
 export async function updateTeam(params: z.infer<typeof updateTeamSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("update-team", "teams");
 
   const attributes = new v2.TeamUpdateAttributes();
   if (params.name !== undefined) attributes.name = params.name;
@@ -108,7 +108,7 @@ export const deleteTeamSchema = z.object({
 });
 
 export async function deleteTeam(params: z.infer<typeof deleteTeamSchema>) {
-  assertWriteAllowed();
+  assertWriteAllowed("delete-team", "teams");
 
   await teamsApi.deleteTeam({
     teamId: params.teamId,

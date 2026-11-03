@@ -6,3 +6,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 *.log
+
+# Internal review reports (not for the repo)
+reports/
